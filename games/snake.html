@@ -58,7 +58,7 @@
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="overlay">
+<div id="overlay" data-game-overlay>
   <h1>SNAKE</h1>
   <p>Arrow Keys or WASD to move</p>
   <p>Walls wrap around</p>
@@ -286,6 +286,14 @@ canvas.addEventListener('touchend', e => {
   if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
   touchStart = null;
 }, { passive: true });
+
+// Dismiss overlay from the gallery host
+canvas.addEventListener('click', () => { if (state !== 'playing') startGame(); });
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'game-maker:dismiss-overlay' && state !== 'playing') {
+    startGame();
+  }
+});
 
 // Init
 state = 'idle';

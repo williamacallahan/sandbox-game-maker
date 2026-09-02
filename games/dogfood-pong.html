@@ -21,6 +21,7 @@
             display: block;
             background: #000;
             border: 2px solid #0f0;
+            touch-action: none;
         }
         #score {
             position: absolute;
@@ -70,8 +71,9 @@
             vy: -4
         };
 
-        // Mouse tracking
-        document.addEventListener('mousemove', (e) => {
+        // Pointer tracking
+        canvas.addEventListener('pointerdown', () => {});
+        canvas.addEventListener('pointermove', (e) => {
             mouseX = e.clientX - canvas.getBoundingClientRect().left;
         });
 
@@ -149,7 +151,7 @@
             ctx.fill();
 
             // Draw center line
-            ctx.strokeStyle = '#0f022';
+            ctx.strokeStyle = '#0f0';
             ctx.setLineDash([5, 5]);
             ctx.beginPath();
             ctx.moveTo(canvas.width / 2, 0);

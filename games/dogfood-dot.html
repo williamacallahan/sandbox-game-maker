@@ -17,6 +17,7 @@
         }
         canvas {
             display: block;
+            touch-action: none;
         }
     </style>
 </head>
@@ -41,7 +42,8 @@
         const dotRadius = 15;
         const followSpeed = 0.1;
 
-        document.addEventListener('mousemove', (e) => {
+        canvas.addEventListener('pointerdown', () => {});
+        window.addEventListener('pointermove', (e) => {
             mouseX = e.clientX;
             mouseY = e.clientY;
         });

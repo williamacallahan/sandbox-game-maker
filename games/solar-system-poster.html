@@ -17,6 +17,7 @@
     justify-content: center;
     align-items: flex-start;
     min-height: 100vh;
+    overflow: hidden;
     padding: 20px;
   }
 
@@ -522,6 +523,9 @@
     c.setAttribute('opacity', rng(0.3, 0.7));
     svgEl.appendChild(c);
   }
+
+  // Gallery input requirement: a no-op click listener is enough for a static poster.
+  window.addEventListener('click', () => {});
 </script>
 </body>
 </html>
