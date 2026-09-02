@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chromatic Triangle</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { width: 100vw; height: 100vh; margin: 0; overflow: hidden; background: #f4f1ea; }
+  body { cursor: crosshair; }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  .label {
+    position: fixed;
+    left: 18px;
+    bottom: 16px;
+    color: #332c3d;
+    font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    pointer-events: none;
+    mix-blend-mode: multiply;
+  }
+</style>
+</head>
+<body>
+<canvas id="art" aria-label="Interactive purple triangle. Move the pointer to paint and click for a rainbow burst."></canvas>
+<div class="label">Move to paint · click to burst · space to clear</div>
+<script>
+  const canvas = document.getElementById('art');
+  const context = canvas.getContext('2d');
+  const splats = [];
+  let width = 0;
+  let height = 0;
+  let scale = 1;
+  let lastX = -100;
+  let lastY = -100;
+  let hue = 280;
+
+  function resize() {
+    scale = Math.min(devicePixelRatio || 1, 2);
+    width = innerWidth;
+    height = innerHeight;
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    draw();
+  }
+
+  function trianglePath() {
+    const size = Math.min(width, height) * .54;
+    const centerX = width / 2;
+    const centerY = height / 2 + size * .05;
+    context.beginPath();
+    context.moveTo(centerX, centerY - size * .58);
+    context.lineTo(centerX + size * .55, centerY + size * .42);
+    context.lineTo(centerX - size * .55, centerY + size * .42);
+    context.closePath();
+  }
+
+  function addDrop(x, y, radius, color) {
+    splats.push({ x, y, radius, color, angle: Math.random() * Math.PI * 2 });
+    if (splats.length > 320) splats.splice(0, splats.length - 320);
+  }
+
+  function splash(x, y, force = 1) {
+    hue = (hue + 31) % 360;
+    const color = `hsl(${hue} 82% 54%)`;
+    addDrop(x, y, (8 + Math.random() * 15) * force, color);
+    const drops = Math.round(3 + force * 5);
+    for (let i = 0; i < drops; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = (10 + Math.random() * 36) * force;
+      addDrop(
+        x + Math.cos(angle) * distance,
+        y + Math.sin(angle) * distance,
+        (2 + Math.random() * 5) * force,
+        `hsl(${(hue + i * 17) % 360} 84% 55%)`,
+      );
+    }
+    draw();
+  }
+
+  function drawDrop(drop) {
+    context.fillStyle = drop.color;
+    context.beginPath();
+    context.arc(drop.x, drop.y, drop.radius, 0, Math.PI * 2);
+    context.fill();
+    context.save();
+    context.translate(drop.x, drop.y);
+    context.rotate(drop.angle);
+    context.scale(1.9, .45);
+    context.beginPath();
+    context.arc(0, 0, drop.radius * .68, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
+
+  function draw() {
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = '#f4f1ea';
+    context.fillRect(0, 0, width, height);
+
+    const wash = context.createRadialGradient(width * .5, height * .45, 0, width * .5, height * .45, Math.max(width, height) * .65);
+    wash.addColorStop(0, '#ffffff');
+    wash.addColorStop(1, '#e7e0d5');
+    context.fillStyle = wash;
+    context.fillRect(0, 0, width, height);
+
+    context.save();
+    context.globalCompositeOperation = 'multiply';
+    splats.forEach(drawDrop);
+    context.restore();
+
+    trianglePath();
+    const purple = context.createLinearGradient(width * .35, height * .25, width * .65, height * .75);
+    purple.addColorStop(0, 'rgba(128, 48, 176, .88)');
+    purple.addColorStop(.55, 'rgba(92, 28, 142, .82)');
+    purple.addColorStop(1, 'rgba(49, 18, 82, .9)');
+    context.fillStyle = purple;
+    context.fill();
+
+    context.save();
+    trianglePath();
+    context.clip();
+    context.globalCompositeOperation = 'screen';
+    splats.forEach(drawDrop);
+    context.restore();
+
+    trianglePath();
+    context.strokeStyle = 'rgba(43, 20, 54, .62)';
+    context.lineWidth = 2;
+    context.stroke();
+  }
+
+  function paint(event) {
+    const distance = Math.hypot(event.clientX - lastX, event.clientY - lastY);
+    if (distance < 12) return;
+    lastX = event.clientX;
+    lastY = event.clientY;
+    splash(lastX, lastY, .7);
+  }
+
+  canvas.addEventListener('pointermove', paint);
+  canvas.addEventListener('pointerdown', (event) => {
+    canvas.setPointerCapture(event.pointerId);
+    splash(event.clientX, event.clientY, 1.8);
+  });
+  canvas.addEventListener('click', (event) => splash(event.clientX, event.clientY, 2.4));
+  addEventListener('keydown', (event) => {
+    if (event.code !== 'Space') return;
+    event.preventDefault();
+    splats.length = 0;
+    draw();
+  });
+  addEventListener('resize', resize);
+  addEventListener('message', (event) => {
+    if (event.data?.type === 'game-maker:dismiss-overlay') canvas.focus();
+  });
+
+  resize();
+</script>
+</body>
+</html>

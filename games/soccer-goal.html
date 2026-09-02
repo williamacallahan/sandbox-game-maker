@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Soccer Goal</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; touch-action: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.8); color: #fff; font-family: monospace; font-size: 2.5vw; gap: 2vh;
+    z-index: 10;
+  }
+  #overlay button { font-size: 1.5vw; padding: 1vh 3vw; cursor: pointer; border: none; border-radius: 8px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="overlay" data-game-overlay>
+  <div>Soccer Goal</div>
+  <button id="startBtn">Start Game</button>
+  <div style="font-size:1.3vw">W/A/D Move | Space Shoot | P Pause</div>
+  <div style="font-size:1.3vw">First to 5 goals wins!</div>
+</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+
+let size = Math.min(window.innerWidth, window.innerHeight);
+canvas.width = size;
+canvas.height = size;
+
+function resize() {
+  size = Math.min(window.innerWidth, window.innerHeight);
+  canvas.width = size;
+  canvas.height = size;
+}
+window.addEventListener('resize', resize);
+
+// Game state
+let gameState = 'menu'; // menu, playing, paused
+let score = { player: 0, opponent: 0 };
+let ball = { x: 0, y: 0, vx: 0, vy: 0 };
+let player = { x: 0, y: 0, vx: 0, vy: 0, radius: 18, facing: 1 };
+let opponent = { x: 0, y: 0, vx: 0, vy: 0, radius: 18, facing: 1 };
+let keys = {};
+let paused = false;
+let lastTouch = 'none';
+let gameTime = 0;
+let hitPauseTimer = 0;
+let hitPauseDuration = 0;
+
+const FIELD_W = 600;
+const FIELD_H = 900;
+const GOAL_W = 160;
+const GOAL_DEPTH = 30;
+
+let overlayTitle = overlay.querySelector('div');
+
+// Message listener for overlay dismissal
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'game-maker:dismiss-overlay') {
+    overlay.style.display = 'none';
+  }
+});
+
+// Input
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (gameState === 'playing' && e.code === 'KeyP') {
+    paused = !paused;
+    if (paused) gameState = 'paused';
+    else gameState = 'playing';
+  }
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  e.preventDefault();
+});
+
+// Click/tap to dismiss pause or kick
+canvas.addEventListener('click', e => {
+  if (gameState === 'paused') {
+    paused = false;
+    gameState = 'playing';
+    return;
+  }
+  if (gameState === 'playing' && !paused) {
+    tryKick();
+  }
+});
+window.addEventListener('touchstart', e => {
+  if (gameState === 'paused') {
+    paused = false;
+    gameState = 'playing';
+    e.preventDefault();
+    return;
+  }
+  if (gameState === 'playing' && !paused) {
+    tryKick();
+  }
+  e.preventDefault();
+}, { passive: false });
+
+startBtn.addEventListener('click', startGame);
+function startGame() {
+  score = { player: 0, opponent: 0 };
+  resetBall();
+  resetPlayers();
+  gameState = 'playing';
+  paused = false;
+  overlay.style.display = 'none';
+}
+
+function resetPlayers() {
+  player.x = FIELD_W / 2;
+  player.y = FIELD_H / 2 + 200;
+  player.vx = 0; player.vy = 0;
+  opponent.x = FIELD_W / 2;
+  opponent.y = FIELD_H / 2 - 200;
+  opponent.vx = 0; opponent.vy = 0;
+}
+
+function resetBall() {
+  ball.x = FIELD_W / 2;
+  ball.y = FIELD_H / 2;
+  ball.vx = 0; ball.vy = 0;
+  lastTouch = 'none';
+}
+
+function tryKick() {
+  // Check if player has the ball
+  const dx = ball.x - player.x;
+  const dy = ball.y - player.y;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if (dist < player.radius + 12) {
+    const strength = 450;
+    ball.vx += dx/dist * strength;
+    ball.vy += dy/dist * strength;
+    lastTouch = 'player';
+    hitPauseTimer = hitPauseDuration = 120;
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && gameState === 'playing' && !paused) {
+    tryKick();
+    e.preventDefault();
+  }
+});
+
+let confetti = [];
+
+function addConfetti(x, y, color) {
+  for (let i = 0; i < 40; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 1;
+    const sx = size / FIELD_W;
+    confetti.push({
+      x: x * sx, y: y * sx,
+      vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+      life: 50, color: color
+    });
+  }
+}
+
+function update(dt) {
+  gameTime += dt;
+  if (paused) return;
+
+  // Ball physics
+  const FRICTION = 0.96;
+  ball.vx *= FRICTION;
+  ball.vy *= FRICTION;
+
+  // Player movement
+  const SPEED = 320;
+  player.vx = 0; player.vy = 0;
+  if (keys['KeyW']) player.vy -= SPEED;
+  if (keys['KeyS']) player.vy += SPEED;
+  if (keys['KeyA']) player.vx -= SPEED;
+  if (keys['KeyD']) player.vx += SPEED;
+  // Normalize diagonal
+  if (Math.abs(player.vx) > 0 && Math.abs(player.vy) > 0) {
+    player.vx *= 0.707;
+    player.vy *= 0.707;
+  }
+
+  player.x += player.vx * dt;
+  player.y += player.vy * dt;
+  player.x = Math.max(player.radius, Math.min(FIELD_W - player.radius, player.x));
+  player.y = Math.max(player.radius, Math.min(FIELD_H - player.radius, player.y));
+
+  // AI opponent - follows ball with simple steering
+  const oppSpeed = 260;
+  const oppDx = ball.x - opponent.x;
+  const oppDy = ball.y - opponent.y;
+  const oppDist = Math.sqrt(oppDx*oppDx + oppDy*oppDy);
+  if (oppDist > 5) {
+    opponent.vx = oppDx / oppDist * oppSpeed;
+    opponent.vy = oppDy / oppDist * oppSpeed;
+  } else {
+    opponent.vx = 0; opponent.vy = 0;
+  }
+
+  // Normalize AI diagonal
+  if (Math.abs(opponent.vx) > 0 && Math.abs(opponent.vy) > 0) {
+    opponent.vx *= 0.707;
+    opponent.vy *= 0.707;
+  }
+
+  opponent.x += opponent.vx * dt;
+  opponent.y += opponent.vy * dt;
+  opponent.x = Math.max(opponent.radius, Math.min(FIELD_W - opponent.radius, opponent.x));
+  opponent.y = Math.max(opponent.radius, Math.min(FIELD_H - opponent.radius, opponent.y));
+
+  // Ball movement
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+
+  // Left/right wall collisions
+  if (ball.x - 8 < 0 || ball.x + 8 > FIELD_W) {
+    ball.vx *= -0.8;
+    ball.x = Math.max(8, Math.min(FIELD_W - 8, ball.x));
+  }
+
+  // Player-ball collision
+  const dx1 = ball.x - player.x;
+  const dy1 = ball.y - player.y;
+  const dist1 = Math.sqrt(dx1*dx1 + dy1*dy1);
+  if (dist1 < player.radius + 8) {
+    if (dist1 > 0) {
+      const nx = dx1 / dist1;
+      const ny = dy1 / dist1;
+      ball.x = player.x + nx * (player.radius + 8);
+      ball.y = player.y + ny * (player.radius + 8);
+      ball.vx += nx * 120;
+      ball.vy += ny * 90;
+      lastTouch = 'player';
+    }
+  }
+
+  // Opponent-ball collision
+  const dx2 = ball.x - opponent.x;
+  const dy2 = ball.y - opponent.y;
+  const dist2 = Math.sqrt(dx2*dx2 + dy2*dy2);
+  if (dist2 < opponent.radius + 8) {
+    if (dist2 > 0) {
+      const nx = dx2 / dist2;
+      const ny = dy2 / dist2;
+      ball.x = opponent.x + nx * (opponent.radius + 8);
+      ball.y = opponent.y + ny * (opponent.radius + 8);
+      ball.vx += nx * 120;
+      ball.vy += ny * 90;
+      lastTouch = 'opponent';
+    }
+  }
+
+  const goalLeft = (FIELD_W - GOAL_W) / 2;
+  const goalRight = (FIELD_W + GOAL_W) / 2;
+
+  // Top goal (player scores if ball enters here)
+  if (ball.y - 8 < 0 && ball.x > goalLeft && ball.x < goalRight) {
+    score.player++;
+    addConfetti(FIELD_W/2, 100, '#0099ff');
+    resetBall();
+    resetPlayers();
+    hitPauseTimer = hitPauseDuration = 400;
+    if (score.player >= 5) {
+      gameState = 'menu';
+      overlay.style.display = 'flex';
+      overlayTitle.textContent = 'YOU WIN! ' + score.player + ' - ' + score.opponent;
+    }
+  }
+  // Bottom goal (opponent scores if ball enters here)
+  if (ball.y + 8 > FIELD_H && ball.x > goalLeft && ball.x < goalRight) {
+    score.opponent++;
+    addConfetti(FIELD_W/2, FIELD_H - 100, '#ff3300');
+    resetBall();
+    resetPlayers();
+    hitPauseTimer = hitPauseDuration = 400;
+    if (score.opponent >= 5) {
+      gameState = 'menu';
+      overlay.style.display = 'flex';
+      overlayTitle.textContent = 'GAME OVER ' + score.player + ' - ' + score.opponent;
+    }
+  }
+
+  if (hitPauseTimer > 0) {
+    hitPauseTimer--;
+  }
+
+  // Update confetti
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const p = confetti[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if (p.life <= 0) confetti.splice(i, 1);
+  }
+}
+
+function draw() {
+  const sx = size / FIELD_W;
+
+  // Clear
+  ctx.fillStyle = '#006600';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw field
+  ctx.save();
+  ctx.scale(sx, sx);
+
+  // Center line
+  ctx.strokeStyle = '#ffffff40';
+  ctx.lineWidth = 4;
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(FIELD_W/2, 0);
+  ctx.lineTo(FIELD_W/2, FIELD_H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Center circle
+  ctx.strokeStyle = '#ffffff40';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(FIELD_W/2, FIELD_H/2, 80, 0, Math.PI*2);
+  ctx.stroke();
+
+  const goalLeft = (FIELD_W - GOAL_W) / 2;
+  const goalRight = (FIELD_W + GOAL_W) / 2;
+
+  // Goals (visible net area)
+  ctx.fillStyle = '#cc9966';
+  ctx.fillRect(goalLeft, -GOAL_DEPTH, GOAL_W, GOAL_DEPTH);
+  ctx.fillRect(goalLeft, FIELD_H, GOAL_W, GOAL_DEPTH);
+
+  // Goal posts
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(goalLeft, 0);
+  ctx.lineTo(goalLeft, -GOAL_DEPTH);
+  ctx.moveTo(goalRight, 0);
+  ctx.lineTo(goalRight, -GOAL_DEPTH);
+  ctx.moveTo(goalLeft, FIELD_H);
+  ctx.lineTo(goalLeft, FIELD_H + GOAL_DEPTH);
+  ctx.moveTo(goalRight, FIELD_H);
+  ctx.lineTo(goalRight, FIELD_H + GOAL_DEPTH);
+  ctx.stroke();
+
+  // Field boundary
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(FIELD_W, 0);
+  ctx.lineTo(FIELD_W, FIELD_H);
+  ctx.lineTo(0, FIELD_H);
+  ctx.lineTo(0, 0);
+  ctx.stroke();
+
+  // Ball
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#cccccc';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, 8, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(ball.x - 2, ball.y - 2, 3, 0, Math.PI*2);
+  ctx.fill();
+
+  // Player (blue)
+  ctx.fillStyle = '#0099ff';
+  ctx.strokeStyle = '#0066cc';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#66ccff';
+  ctx.beginPath();
+  ctx.arc(player.x - 5, player.y - 5, 5, 0, Math.PI*2);
+  ctx.fill();
+  // Player name label
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 16px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('YOU', player.x, player.y - 28);
+
+  // Opponent (red)
+  ctx.fillStyle = '#ff3300';
+  ctx.strokeStyle = '#cc0000';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(opponent.x, opponent.y, opponent.radius, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ff6666';
+  ctx.beginPath();
+  ctx.arc(opponent.x - 5, opponent.y - 5, 5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('AI', opponent.x, opponent.y - 28);
+
+  // Score display
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 36px monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(score.player + ' - ' + score.opponent, FIELD_W/2, 50);
+
+  ctx.restore();
+
+  // Pause indicator (screen space)
+  if (paused) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 56px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PAUSED', canvas.width/2, canvas.height/2 - 20);
+    ctx.font = '24px monospace';
+    ctx.fillText('Press P or tap to resume', canvas.width/2, canvas.height/2 + 30);
+  }
+
+  // Confetti
+  ctx.save();
+  for (const p of confetti) {
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, 6, 6);
+  }
+  ctx.restore();
+}
+
+let lastTime = 0;
+function loop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+  const clampedDt = Math.min(dt, 0.03);
+
+  if (gameState === 'playing') {
+    if (hitPauseTimer <= 0) {
+      update(clampedDt);
+    } else {
+      // Hit pause: skip physics but still process timing
+      hitPauseTimer--;
+    }
+  }
+
+  draw();
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

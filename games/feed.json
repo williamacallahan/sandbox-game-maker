@@ -1,0 +1,618 @@
+[
+  {
+    "file": "gateway-script-smoke.html",
+    "prompt": "Create a minimal static HTML page with one centered black dot on white. Save it once, validate it, and finish.",
+    "model": "qwen3.8-27b",
+    "ts": 1788370104886,
+    "instructions": "Static page: a black dot centered on a white background.",
+    "settings": {
+      "model": "qwen3.8-27b",
+      "reasoningEffort": "none",
+      "maxToolCalls": 12,
+      "maxContextTokens": 64000,
+      "maxOutputTokens": 3000,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser)\n- No frameworks, npm installs, or CDN imports.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/window.innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Interactive works must start unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Vanilla JavaScript only.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) should be issued in parallel in one step if possible.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "llama-router-haiku-10",
+      "tokensPerSec": null,
+      "ttftMs": 8180,
+      "inputTokens": 17168,
+      "outputTokens": 1063,
+      "totalTokens": 18231,
+      "reasoningTokens": 0,
+      "toolCalls": 7,
+      "durationMs": 11504,
+      "cost": 0,
+      "upstreamCost": null
+    }
+  },
+  {
+    "file": "purple-triangle.html",
+    "prompt": "Create an interactive purple triangle artwork with cursor-driven rainbow paint splatters.",
+    "model": "SWE-1.7",
+    "ts": 1788370017281,
+    "instructions": "Move the pointer or drag a finger to paint rainbow splatters. Click or tap for a larger burst. Press Space to clear the canvas."
+  },
+  {
+    "file": "snowball-fight.html",
+    "prompt": "Make a really fun Snowball game, with the ability to pause the game",
+    "model": "x-ai/grok-4.6",
+    "ts": 1788329397001,
+    "instructions": "Move with A/D or arrows (or drag). Click or tap to throw snowballs at snowmen. Dodge their shots. P or Pause to pause; Resume or P to continue.",
+    "settings": {
+      "model": "x-ai/grok-4.6",
+      "reasoningEffort": "low",
+      "maxToolCalls": 24,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser)\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the 'click' event, not only 'pointerdown', so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) should be issued in parallel in one step if possible.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "xAI",
+      "tokensPerSec": 33,
+      "ttftMs": 6601,
+      "inputTokens": 106608,
+      "outputTokens": 12632,
+      "totalTokens": 119240,
+      "reasoningTokens": 1427,
+      "toolCalls": 8,
+      "durationMs": 173466,
+      "cost": 0.18686399999999997,
+      "upstreamCost": 0.159336
+    }
+  },
+  {
+    "file": "soccer-goal.html",
+    "prompt": "Make a really fun soccer game, with the ability to pause the game",
+    "model": "poolside/laguna-s-2.1:free",
+    "ts": 1788327640551,
+    "instructions": "Move with W/A/D keys (and S) to control your blue player. Press Spacebar near the ball to kick it toward the opponent's goal. P key toggles pause. First to 5 goals wins. Ball bounces off players and walls with friction physics.",
+    "settings": {
+      "model": "poolside/laguna-s-2.1:free",
+      "reasoningEffort": "high",
+      "maxToolCalls": 32,
+      "maxContextTokens": 200000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser)\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the 'click' event, not only 'pointerdown', so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) should be issued in parallel in one step if possible.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Poolside",
+      "tokensPerSec": 37,
+      "ttftMs": 3410,
+      "inputTokens": 55746,
+      "outputTokens": 10133,
+      "totalTokens": 65879,
+      "reasoningTokens": 925,
+      "toolCalls": 5,
+      "durationMs": 254260,
+      "cost": 0,
+      "upstreamCost": 0
+    }
+  },
+  {
+    "file": "powder-rush.html",
+    "prompt": "Make a really fun snowboarding game, with the ability to pause the game",
+    "model": "meta/muse-spark-1.2-contributor",
+    "ts": 1788327387835,
+    "instructions": "Arrow Left/Right or A/D = lean/spin, Up/Space = jump, Down/S = tuck/crouch for speed, P/Esc or Pause button = pause/resume. Chain spins in air and land straight to score!",
+    "settings": {
+      "model": "meta/muse-spark-1.2-contributor",
+      "reasoningEffort": "high",
+      "maxToolCalls": 32,
+      "maxContextTokens": 200000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser)\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the 'click' event, not only 'pointerdown', so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) should be issued in parallel in one step if possible.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Meta",
+      "tokensPerSec": 58,
+      "ttftMs": 19165,
+      "inputTokens": 131790,
+      "outputTokens": 23360,
+      "totalTokens": 155150,
+      "reasoningTokens": 3177,
+      "toolCalls": 5,
+      "durationMs": 99580,
+      "cost": 0.013628082000000001,
+      "upstreamCost": 0.010909382
+    }
+  },
+  {
+    "file": "diamond-dash.html",
+    "prompt": "Make a really fun baseball game, with the ability to pause the game",
+    "model": "openai/gpt-5.6-luna-pro",
+    "ts": 1788324608193,
+    "instructions": "Swing with click, tap, or Space when the ball reaches the plate; move your pointer to aim. Score hits and home runs, survive three outs, and use P, Escape, or the PAUSE button to pause.",
+    "settings": {
+      "model": "openai/gpt-5.6-luna-pro",
+      "reasoningEffort": "high",
+      "maxToolCalls": 32,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 64000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser)\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) should be issued in parallel in one step if possible.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "OpenAI",
+      "tokensPerSec": 68,
+      "ttftMs": 156925,
+      "inputTokens": 94878,
+      "outputTokens": 31326,
+      "totalTokens": 126204,
+      "reasoningTokens": 12122,
+      "toolCalls": 2,
+      "durationMs": 157063,
+      "cost": 0,
+      "upstreamCost": 0.00465154
+    }
+  },
+  {
+    "file": "neon-drift-rush.html",
+    "prompt": "Make a really fun racing game, with the ability to pause the game",
+    "model": "openai/gpt-5.6-luna-pro",
+    "ts": 1788322702539,
+    "instructions": "Steer with \u2190 \u2192 or A/D and dodge traffic. Your speed and distance build over time. Press P, Space, or the PAUSE button to pause; resume with the button.",
+    "settings": {
+      "model": "openai/gpt-5.6-luna-pro",
+      "reasoningEffort": null,
+      "maxToolCalls": 32,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 64000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "OpenAI",
+      "tokensPerSec": null,
+      "ttftMs": 108554,
+      "inputTokens": 93327,
+      "outputTokens": 21564,
+      "totalTokens": 114891,
+      "reasoningTokens": 3528,
+      "toolCalls": 4,
+      "durationMs": 108595,
+      "cost": 0
+    }
+  },
+  {
+    "file": "sammy-the-bird.html",
+    "prompt": "Make a fun game about Sammy the bird, as written by the author V Moua, and his bird adventures",
+    "model": "qwen/qwen3.8-flash",
+    "ts": 1788321728057,
+    "instructions": "Flap Sammy the Bird through his big-sky adventure! Tap, click, or press SPACE / ARROW-UP / W to flap. Grab golden berries (+5 each), squeeze through the leafy branch gaps, and dodge the grumpy storm clouds. Hit the ground or a branch and the chapter ends \u2014 press SPACE or click to fly again. Score grows with distance and berries.",
+    "settings": {
+      "model": "qwen/qwen3.8-flash",
+      "reasoningEffort": null,
+      "maxToolCalls": 32,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 64000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Alibaba",
+      "tokensPerSec": null,
+      "ttftMs": 800,
+      "inputTokens": 30386,
+      "outputTokens": 12303,
+      "totalTokens": 42689,
+      "reasoningTokens": 2986,
+      "toolCalls": 3,
+      "durationMs": 102669,
+      "cost": 0.007973334
+    }
+  },
+  {
+    "file": "voxel-world.html",
+    "prompt": "Make a really cool Minecraft-like navigable world game",
+    "model": "z-ai/glm-5.3-flash",
+    "ts": 1788321551328,
+    "instructions": "WASD to move, SPACE to jump, drag mouse (or arrow keys) to look around. Click to break blocks, right-click or Q to place. Keys 1-6 pick a block; F toggles fly mode (SPACE/SHIFT for up/down). Explore the island, mine, and build.",
+    "settings": {
+      "model": "z-ai/glm-5.3-flash",
+      "reasoningEffort": null,
+      "maxToolCalls": 32,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 64000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Venice",
+      "tokensPerSec": null,
+      "ttftMs": 1959,
+      "inputTokens": 92006,
+      "outputTokens": 19599,
+      "totalTokens": 111605,
+      "reasoningTokens": 6926,
+      "toolCalls": 4,
+      "durationMs": 291499,
+      "cost": 0.019176719999999998
+    }
+  },
+  {
+    "file": "sky-dash.html",
+    "prompt": "Make a really fun airplane game, with the ability to pause the game",
+    "model": "qwen/qwen3.8-flash",
+    "ts": 1788321308368,
+    "instructions": "Steer with WASD / Arrows / mouse / finger drag. Space, click or tap shoots. Grab stars & hearts, pop balloons, birds and enemy jets, don't crash. Pause any time with P, Esc or the \u275a\u275a button (auto-pauses if you switch tabs).",
+    "settings": {
+      "model": "qwen/qwen3.8-flash",
+      "reasoningEffort": "xhigh",
+      "maxToolCalls": 24,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 64000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Alibaba",
+      "tokensPerSec": 38,
+      "ttftMs": 1042,
+      "inputTokens": 211188,
+      "outputTokens": 54727,
+      "totalTokens": 265915,
+      "reasoningTokens": 13365,
+      "toolCalls": 5,
+      "durationMs": 545598,
+      "cost": 0.036680274
+    }
+  },
+  {
+    "file": "crash-derby.html",
+    "prompt": "Make a really fun racing crash derby game, with the ability to pause the game",
+    "model": "z-ai/glm-5.3-flash",
+    "ts": 1788320954561,
+    "instructions": "Drive with WASD or Arrow keys, hit SPACE for nitro boost, and ram rival cars until they explode \u2014 the harder the hit, the more damage and points. Clearing a wave spawns a bigger one. Your armor is limited, so dodge head-on hits from faster rivals. Press P or ESC (or the PAUSE button) to pause and resume.",
+    "settings": {
+      "model": "z-ai/glm-5.3-flash",
+      "reasoningEffort": null,
+      "maxToolCalls": 32,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Venice",
+      "tokensPerSec": null,
+      "ttftMs": 890,
+      "inputTokens": 19679,
+      "outputTokens": 8175,
+      "totalTokens": 27854,
+      "reasoningTokens": 1510,
+      "toolCalls": 2,
+      "durationMs": 97390,
+      "cost": 0.00703935
+    }
+  },
+  {
+    "file": "zelda-blade-dash.html",
+    "prompt": "make a really fun Zelda game: make it so it has WASD controls, space to slash, dash with shift, and p to pause the game",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788320881033,
+    "instructions": "Top-down Zelda-style action arena. WASD/arrows to move, SPACE slashes (3-hit chain), SHIFT dashes (costs stamina, brief i-frames), P pauses, M mutes. Slash through mobs of blobs, knights and elites across endless waves, dash through attacks, grab hearts and gems to survive and rack up score.",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": null,
+      "maxToolCalls": 24,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 64000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Venice",
+      "tokensPerSec": null,
+      "ttftMs": 1000,
+      "inputTokens": 195431,
+      "outputTokens": 40577,
+      "totalTokens": 236008,
+      "reasoningTokens": 9010,
+      "toolCalls": 5,
+      "durationMs": 292654,
+      "cost": 0.21779035000000002
+    }
+  },
+  {
+    "file": "zelda-blade.html",
+    "prompt": "make a fun Zelda game",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788319412129,
+    "instructions": "Move with Arrow keys or WASD. Slash with Space or Z, dash with X or Shift. Slice ghouls, dodongo flyers and octorok shooters to clear waves; hearts heal you, rupees add score. Don't lose all your hearts!",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": "medium",
+      "maxToolCalls": 24,
+      "maxContextTokens": 128000,
+      "maxOutputTokens": 32000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Novita",
+      "tokensPerSec": 38,
+      "ttftMs": 880,
+      "inputTokens": 31347,
+      "outputTokens": 11658,
+      "totalTokens": 43005,
+      "reasoningTokens": 2464,
+      "toolCalls": 2,
+      "durationMs": 240426,
+      "cost": 0.04485356
+    }
+  },
+  {
+    "file": "hyrule-blade.html",
+    "prompt": "make a Zelda game",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788318490438,
+    "instructions": "Move with WASD / arrow keys, attack with SPACE / J. On touch: left half = joystick, right half = strike. Slash the blobs, grab hearts, gems, coins and the sword upgrade; once foes drop to 2 or fewer the altar activates \u2014 step on it to win. R or click to restart.",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": "medium",
+      "maxToolCalls": 8,
+      "maxContextTokens": 64000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Venice",
+      "tokensPerSec": 62,
+      "ttftMs": 971,
+      "inputTokens": 143699,
+      "outputTokens": 26734,
+      "totalTokens": 170433,
+      "reasoningTokens": 3732,
+      "toolCalls": 7,
+      "durationMs": 200134,
+      "cost": 0.15021335000000002
+    }
+  },
+  {
+    "file": "zelda-low.html",
+    "prompt": "make Zelda",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788315769063,
+    "instructions": "WASD or Arrow keys to move, SPACE or Z to slash enemies. Survive as long as possible in the dungeon. Each level up adds more enemies and faster spawns.",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": "low",
+      "maxToolCalls": 8,
+      "maxContextTokens": 64000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Chutes",
+      "tokensPerSec": null,
+      "ttftMs": 1308,
+      "inputTokens": 14498,
+      "outputTokens": 5406,
+      "totalTokens": 19904,
+      "reasoningTokens": 0,
+      "toolCalls": 2,
+      "durationMs": 102547,
+      "cost": 0.01654156
+    }
+  },
+  {
+    "file": "zelda8000.html",
+    "prompt": "make Zelda",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788315507476,
+    "instructions": "Explore the overworld, fight slimes and ghosts, grab hearts, then head to the dungeon (left cave) and defeat the boss. Move with Arrow keys / WASD (or the on-screen d-pad on touch). Sword: Space / J (A button). Bow: K / Shift (B button). R or tap to restart after game over / victory.",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": null,
+      "maxToolCalls": 8,
+      "maxContextTokens": 64000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": 8000,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Chutes",
+      "tokensPerSec": 14,
+      "ttftMs": 179875,
+      "inputTokens": 28385,
+      "outputTokens": 11630,
+      "totalTokens": 40015,
+      "reasoningTokens": 0,
+      "toolCalls": 3,
+      "durationMs": 185717,
+      "cost": 0.038158199999999996
+    }
+  },
+  {
+    "file": "creativelygame3.html",
+    "prompt": "make an AMAZING creative game",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788315424185,
+    "instructions": "Move your mouse or finger to guide the last firefly through the dark meadow. Eat glowing light motes to restore your fading glow and build combo multipliers, but dodge the dark bats \u2014 they steal your light. If the light bar at the top empties, the night wins. Score as many motes as you can; best score is saved. Press M to toggle sound.",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": "medium",
+      "maxToolCalls": 16,
+      "maxContextTokens": 64000,
+      "maxOutputTokens": 36000,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You build small, self-contained creative works from a single prompt.\n\nRules:\n- Build the thing the request asks for, then save it. Always finish with a saved file, never with prose alone.\n- Read a short request as the subject of the thing to build. \"cat\" means build a cat, not answer a question about cats.\n- There are two ways to build it, and the request decides which:\n  - Something to play with \u2014 a toy, a game, a fidget, a creature, a simulation, a scene that moves or answers touch \u2014 is an interactive .html file (or a plain .js file runnable with `bun file.js` for terminal play).\n  - Anything else \u2014 a poster, a chart, a dashboard, a reference card, a page to read \u2014 is a static .html file.\n- When a request could be either, build the interactive one. It is the better medium for anything that moves.\n- One self-contained file that runs with zero build steps. Inline every style and script. Make no external requests of any kind: no CDN, no web fonts, no images by URL, no npm installs. The file runs with no network, so anything fetched is simply missing.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Vanilla JavaScript only. Draw images with CSS, SVG, or canvas, or embed them as data URIs.\n- Save the finished work with the save_game tool using a short kebab-case filename.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line telling the user how to open or play it. Nothing else.\n- A small complete work beats a large broken one."
+    },
+    "stats": {
+      "provider": "Chutes",
+      "tokensPerSec": null,
+      "ttftMs": 1888,
+      "inputTokens": 22225,
+      "outputTokens": 9310,
+      "totalTokens": 31535,
+      "reasoningTokens": 0,
+      "toolCalls": 2,
+      "durationMs": 157093,
+      "cost": 0.030387
+    }
+  },
+  {
+    "file": "creativelygaming.html",
+    "prompt": "make an AMAZING creative game",
+    "model": "qwen/qwen3.8-flash",
+    "ts": 1788314571568,
+    "instructions": "ECHO HARVEST \u2014 a time-loop harvesting game. Move with WASD / arrow keys (or hold LEFT MOUSE to steer). Grab glowing shards for score and chain pickups for a multiplier. Every 14 seconds time resets and an \"echo\" of your last run replays forever, still collecting \u2014 but rotating blades keep multiplying and speeding up. Press SPACE to spend 4 charge and slow time (BLOOM). Press M to mute, R to retry. Survive as long as you can.",
+    "settings": {
+      "model": "qwen/qwen3.8-flash",
+      "reasoningEffort": null,
+      "maxToolCalls": 16,
+      "maxContextTokens": 40000,
+      "maxOutputTokens": null,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You build small, self-contained creative works from a single prompt.\n\nRules:\n- Build the thing the request asks for, then save it. Always finish with a saved file, never with prose alone.\n- Read a short request as the subject of the thing to build. \"cat\" means build a cat, not answer a question about cats.\n- There are two ways to build it, and the request decides which:\n  - Something to play with \u2014 a toy, a game, a fidget, a creature, a simulation, a scene that moves or answers touch \u2014 is an interactive .html file (or a plain .js file runnable with `bun file.js` for terminal play).\n  - Anything else \u2014 a poster, a chart, a dashboard, a reference card, a page to read \u2014 is a static .html file.\n- When a request could be either, build the interactive one. It is the better medium for anything that moves.\n- One self-contained file that runs with zero build steps. Inline every style and script. Make no external requests of any kind: no CDN, no web fonts, no images by URL, no npm installs. The file runs with no network, so anything fetched is simply missing.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Vanilla JavaScript only. Draw images with CSS, SVG, or canvas, or embed them as data URIs.\n- Save the finished work with the save_game tool using a short kebab-case filename.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line telling the user how to open or play it. Nothing else.\n- A small complete work beats a large broken one."
+    },
+    "stats": {
+      "provider": "Alibaba",
+      "tokensPerSec": 13,
+      "ttftMs": 13946,
+      "inputTokens": 64271,
+      "outputTokens": 37634,
+      "totalTokens": 101905,
+      "reasoningTokens": 9620,
+      "toolCalls": 2,
+      "durationMs": 466862,
+      "cost": 0.023932534000000002
+    }
+  },
+  {
+    "file": "bunnies.html",
+    "prompt": "make something really fun and colorful with bunnies that's fun to play",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788314312360,
+    "instructions": "Tap or click bunnies as they pop out of the holes to score points. Avoid the red fox! Higher-value bunnies (pink, purple, gold) are worth more. You have 30 seconds \u2014 go fast!",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": "low",
+      "maxToolCalls": 8,
+      "maxContextTokens": 40000,
+      "maxOutputTokens": null,
+      "maxReasoningTokens": null,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": null,
+      "tokensPerSec": null,
+      "ttftMs": 1415,
+      "inputTokens": 9350,
+      "outputTokens": 7305,
+      "totalTokens": 16655,
+      "reasoningTokens": 0,
+      "toolCalls": 1,
+      "durationMs": 169998,
+      "cost": 0.021254500000000003
+    }
+  },
+  {
+    "file": "gta-yo.html",
+    "prompt": "a grand theft auto game with street characters in San Francisco on Market Street",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788312500122,
+    "instructions": "Drive with WASD or the arrow keys. Hold Space to handbrake. Steal cars, collect cash, and avoid the police.",
+    "settings": {
+      "model": "qwen/qwen3.8-27b",
+      "reasoningEffort": null,
+      "maxToolCalls": 16,
+      "maxContextTokens": 40000,
+      "maxOutputTokens": 80000,
+      "maxReasoningTokens": 16000,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
+    },
+    "stats": {
+      "provider": "Phala",
+      "tokensPerSec": 8,
+      "ttftMs": 183661,
+      "totalTokens": 19479,
+      "reasoningTokens": 0,
+      "toolCalls": 1,
+      "durationMs": 185687,
+      "cost": 0.026824399999999998
+    }
+  },
+  {
+    "file": "dogfood-dot.html",
+    "prompt": "a single blue dot that follows the mouse",
+    "model": "anthropic/claude-haiku-4.5",
+    "ts": 1788311369552,
+    "settings": {
+      "model": "anthropic/claude-haiku-4.5",
+      "reasoningEffort": "none",
+      "maxToolCalls": 8,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
+      "maxContextTokens": 37500
+    }
+  },
+  {
+    "file": "dogfood-breakout.html",
+    "prompt": "a breakout clone with three levels, particle effects on brick hits, and a scoreboard",
+    "model": "anthropic/claude-sonnet-4.6",
+    "ts": 1788311028186,
+    "settings": {
+      "model": "anthropic/claude-sonnet-4.6",
+      "reasoningEffort": "medium",
+      "maxToolCalls": 8,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
+      "maxContextTokens": 37500
+    }
+  },
+  {
+    "file": "dogfood-pong.html",
+    "prompt": "a minimal pong game, one paddle, mouse control",
+    "model": "anthropic/claude-haiku-4.5",
+    "ts": 1788310743185,
+    "settings": {
+      "model": "anthropic/claude-haiku-4.5",
+      "reasoningEffort": "low",
+      "maxToolCalls": 8,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
+      "maxContextTokens": 37500
+    }
+  },
+  {
+    "file": "snake.html",
+    "prompt": "a snake game with wrap-around walls",
+    "model": "anthropic/claude-sonnet-4.6",
+    "ts": 1788310609751,
+    "settings": {
+      "model": "anthropic/claude-sonnet-4.6",
+      "reasoningEffort": null,
+      "maxToolCalls": 8,
+      "maxCost": 1,
+      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
+      "maxContextTokens": 37500
+    }
+  }
+]

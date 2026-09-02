@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Voxel World</title>
+<style>
+  html,body{margin:0;padding:0;overflow:hidden;width:100vw;height:100vh;background:#9fcef5;font-family:monospace;}
+  #c{position:fixed;inset:0;width:100vw;height:100vh;display:block;touch-action:none;cursor:crosshair;}
+  #cross{position:fixed;left:50%;top:50%;width:18px;height:18px;transform:translate(-50%,-50%);pointer-events:none;}
+  #cross:before,#cross:after{content:"";position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 2px rgba(0,0,0,.6);}
+  #cross:before{left:8px;top:0;width:2px;height:18px;}
+  #cross:after{left:0;top:8px;width:18px;height:2px;}
+  #hotbar{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);display:flex;gap:6px;z-index:5;}
+  .slot{width:44px;height:44px;border:3px solid rgba(0,0,0,.45);border-radius:6px;position:relative;cursor:pointer;padding:0;}
+  .slot canvas{width:100%;height:100%;border-radius:3px;display:block;}
+  .slot span{position:absolute;left:3px;top:1px;color:#fff;font-size:11px;text-shadow:0 1px 2px #000;pointer-events:none;}
+  .slot.sel{border-color:#fff;box-shadow:0 0 8px rgba(255,255,255,.8);}
+  #hint{position:fixed;left:8px;bottom:8px;color:#fff;font-size:11px;text-shadow:0 1px 2px #000;opacity:.85;pointer-events:none;z-index:4;max-width:70vw;line-height:1.5;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cross"></div>
+<div id="hotbar"></div>
+<div id="hint">WASD move &middot; SPACE jump &middot; drag to look &middot; CLICK break &middot; RIGHT-CLICK / Q place<br>1-6 select block &middot; F toggle fly (space/shift up-down) &middot; arrows also look</div>
+<script>
+"use strict";
+const cv = document.getElementById("c");
+const ctx = cv.getContext("2d");
+const T_AIR=0,T_GRASS=1,T_DIRT=2,T_STONE=3,T_WOOD=4,T_LEAF=5,T_SAND=6,T_WATER=7;
+const WX=40, WZ=40, WY=36, WATER_LVL=10;
+const world = new Uint8Array(WX*WY*WZ);
+const idx=(x,y,z)=>(y*WZ+z)*WX+x;
+const inW=(x,y,z)=>x>=0&&x<WX&&y>=0&&y<WY&&z>=0&&z<WZ;
+const get=(x,y,z)=>inW(x,y,z)?world[idx(x,y,z)]:(y<0?T_STONE:T_AIR);
+const solid=(x,y,z)=>{const t=get(x,y,z);return t!==T_AIR&&t!==T_WATER;};
+
+// ---------- terrain ----------
+function hash2(x,z){let h=(x*374761393+z*668265263)|0;h=(h^(h>>13))*1274126177;h=(h^(h>>16))>>>0;return h/4294967295;}
+function height(x,z){
+  return 12 + 5*Math.sin(x*0.28)*Math.cos(z*0.23)
+       + 3*Math.sin(x*0.11+z*0.13+2.1)
+       + 1.6*Math.sin(x*0.53-z*0.41+0.7)
+       + hash2(x,z)*0.9;
+}
+function gen(){
+  const hs=new Int16Array(WX*WZ);
+  for(let x=0;x<WX;x++)for(let z=0;z<WZ;z++){
+    let h=Math.floor(height(x,z)); h=Math.max(2,Math.min(WY-6,h)); hs[x+z*WX]=h;
+    for(let y=0;y<=h;y++){
+      let t;
+      if(y===h) t = h<=WATER_LVL? T_SAND : T_GRASS;
+      else if(y>h-3) t = h<=WATER_LVL? T_SAND : T_DIRT;
+      else t=T_STONE;
+      world[idx(x,y,z)]=t;
+    }
+    for(let y=h+1;y<=WATER_LVL;y++) world[idx(x,y,z)]=T_WATER;
+  }
+  // trees
+  let placed=0,tries=0;
+  while(placed<16&&tries<300){
+    tries++;
+    const x=2+Math.floor(hash2(tries,7)* (WX-4));
+    const z=2+Math.floor(hash2(3,tries*13)* (WZ-4));
+    const h=hs[x+z*WX];
+    if(h<=WATER_LVL+1||get(x,h,z)!==T_GRASS) continue;
+    const th=4+Math.floor(hash2(x,z*3)*2);
+    for(let y=1;y<=th;y++) world[idx(x,h+y,z)]=T_WOOD;
+    for(let dy=th-1;dy<=th+1;dy++)for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){
+      const r=Math.abs(dx)+Math.abs(dz)+Math.abs(dy-th);
+      if(r<=3&&!(dx===0&&dz===0&&dy<th+1)&&dy<=th+1&&dy>=th-1){
+        if(r<3||hash2(dx*31+dy,dz*17)<0.6){ if(get(x+dx,h+dy+1,z+dz)===T_AIR) world[idx(x+dx,h+dy+1,z+dz)]=T_LEAF; }
+      }
+    }
+    world[idx(x,h+th+2,z)]=T_LEAF;
+    placed++;
+  }
+}
+
+// ---------- faces ----------
+const DIRS=[
+  [0,1,0],[0,-1,0],[1,0,0],[-1,0,0],[0,0,1],[0,0,-1]
+];
+const CORNERS=[
+  [[0,1,0],[1,1,0],[1,1,1],[0,1,1]],
+  [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+  [[1,0,0],[1,1,0],[1,1,1],[1,0,1]],
+  [[0,0,0],[0,1,0],[0,1,1],[0,0,1]],
+  [[0,0,1],[1,0,1],[1,1,1],[0,1,1]],
+  [[0,0,0],[1,0,0],[1,1,0],[0,1,0]]
+];
+const SHADE=[1.0,0.5,0.72,0.72,0.86,0.86];
+const COLS={ // [+y,-y,+x,-x,+z,-z]
+  1:[[116,196,80],[140,100,68],[104,134,72],[104,134,72],[104,134,72],[104,134,72]],
+  2:[[140,100,68],[120,84,56],[134,96,67],[134,96,67],[134,96,67],[134,96,67]],
+  3:[[132,132,136],[118,118,122],[128,128,132],[128,128,132],[122,122,126],[122,122,126]],
+  4:[[172,140,92],[172,140,92],[106,82,50],[106,82,50],[112,88,54],[112,88,54]],
+  5:[[74,152,68],[60,132,58],[66,142,62],[66,142,62],[70,148,64],[70,148,64]],
+  6:[[224,210,166],[210,196,152],[218,204,160],[218,204,160],[214,200,156],[214,200,156]],
+  7:[[80,140,230],[60,120,215],[70,130,222],[70,130,222],[74,134,226],[74,134,226]]
+};
+let fbx,fby,fbz,fdir,ftype,fshade,fcount=0;
+let pxa,pya; // projected screen coords per face (4 corners)
+const fbuf={x:new Int16Array(120000),y:new Int16Array(120000),z:new Int16Array(120000),d:new Uint8Array(120000)};
+function rebuildFaces(){
+  fcount=0;
+  for(let y=0;y<WY;y++)for(let z=0;z<WZ;z++)for(let x=0;x<WX;x++){
+    const t=world[idx(x,y,z)];
+    if(t===T_AIR) continue;
+    for(let d=0;d<6;d++){
+      const n=DIRS[d];
+      const nb=get(x+n[0],y+n[1],z+n[2]);
+      let vis;
+      if(t===T_WATER) vis = nb===T_AIR;
+      else vis = nb===T_AIR||nb===T_WATER;
+      if(!vis) continue;
+      if(fcount>=120000) break;
+      fbuf.x[fcount]=x; fbuf.y[fcount]=y; fbuf.z[fcount]=z; fbuf.d[fcount]=d;
+      fcount++;
+    }
+  }
+  fbx=new Int16Array(fcount);fby=new Int16Array(fcount);fbz=new Int16Array(fcount);
+  fdir=new Uint8Array(fcount);ftype=new Uint8Array(fcount);fshade=new Float32Array(fcount);
+  for(let i=0;i<fcount;i++){
+    const x=fbuf.x[i],y=fbuf.y[i],z=fbuf.z[i],d=fbuf.d[i];
+    fbx[i]=x;fby[i]=y;fbz[i]=z;fdir[i]=d;ftype[i]=world[idx(x,y,z)];
+    fshade[i]=SHADE[d]*(0.94+0.10*(((x*73856093^y*19349663^z*83492791)>>>0)%97)/97);
+  }
+  pxa=new Float32Array(fcount*4);
+  pya=new Float32Array(fcount*4);
+}
+
+// ---------- player ----------
+const P={x:WX/2+0.5,y:20,z:WZ/2+0.5,vx:0,vy:0,vz:0,yaw:0.6,pitch:-0.15,onGround:false,fly:false};
+function spawn(){
+  const cx=Math.floor(WX/2), cz=Math.floor(WZ/2);
+  let h=WATER_LVL+1;
+  for(let y=WY-1;y>=0;y--){ if(solid(cx,y,cz)){h=y+1;break;} }
+  P.x=cx+0.5;P.z=cz+0.5;P.y=h+1;
+}
+function boxHits(px,py,pz){
+  const r=0.3,hh=1.8;
+  const x0=Math.floor(px-r),x1=Math.floor(px+r);
+  const y0=Math.floor(py),y1=Math.floor(py+hh-0.001);
+  const z0=Math.floor(pz-r),z1=Math.floor(pz+r);
+  for(let y=y0;y<=y1;y++)for(let z=z0;z<=z1;z++)for(let x=x0;x<=x1;x++) if(solid(x,y,z)) return true;
+  return false;
+}
+
+// ---------- input ----------
+const keys={};
+let sel=T_GRASS;
+addEventListener("keydown",e=>{
+  keys[e.code]=true;
+  if(e.code==="Space")e.preventDefault();
+  if(e.code.startsWith("Digit")){const n=+e.code.slice(5);if(n>=1&&n<=6)setSel(palette[n-1]);}
+  if(e.code==="KeyF"){P.fly=!P.fly;P.vy=0;}
+  if(e.code==="KeyQ")placeBlock();
+});
+addEventListener("keyup",e=>keys[e.code]=false);
+
+let dragging=false,dragMoved=0,lastMX=0,lastMY=0,downT=0;
+cv.addEventListener("mousedown",e=>{
+  if(e.button===0){dragging=true;dragMoved=0;lastMX=e.clientX;lastMY=e.clientY;downT=performance.now();}
+  if(e.button===2)placeBlock();
+});
+addEventListener("mousemove",e=>{
+  if(!dragging)return;
+  const dx=e.clientX-lastMX,dy=e.clientY-lastMY;
+  lastMX=e.clientX;lastMY=e.clientY;
+  dragMoved+=Math.abs(dx)+Math.abs(dy);
+  P.yaw+=dx*0.0035; P.pitch-=dy*0.0035;
+  P.pitch=Math.max(-1.45,Math.min(1.45,P.pitch));
+});
+addEventListener("mouseup",e=>{
+  if(e.button===0&&dragging){
+    dragging=false;
+    if(dragMoved<6&&performance.now()-downT<400) breakBlock();
+  }
+});
+cv.addEventListener("contextmenu",e=>e.preventDefault());
+// touch look
+let tId=null,tLX=0,tLY=0,tMoved=0,tT=0;
+cv.addEventListener("touchstart",e=>{
+  e.preventDefault();
+  if(tId===null){const t=e.changedTouches[0];tId=t.identifier;tLX=t.clientX;tLY=t.clientY;tMoved=0;tT=performance.now();}
+},{passive:false});
+cv.addEventListener("touchmove",e=>{
+  e.preventDefault();
+  for(const t of e.changedTouches) if(t.identifier===tId){
+    const dx=t.clientX-tLX,dy=t.clientY-tLY;
+    tLX=t.clientX;tLY=t.clientY;tMoved+=Math.abs(dx)+Math.abs(dy);
+    P.yaw+=dx*0.005;P.pitch-=dy*0.005;
+    P.pitch=Math.max(-1.45,Math.min(1.45,P.pitch));
+  }
+},{passive:false});
+cv.addEventListener("touchend",e=>{
+  for(const t of e.changedTouches) if(t.identifier===tId){
+    tId=null;
+    if(tMoved<10&&performance.now()-tT<300) breakBlock();
+  }
+});
+addEventListener("touchcancel",()=>tId=null);
+
+// ---------- raycast ----------
+function raycast(){
+  const cp=Math.cos(P.pitch),sp=Math.sin(P.pitch),cy=Math.cos(P.yaw),sy=Math.sin(P.yaw);
+  const dx=sy*cp,dy=sp,dz=-cy*cp;
+  const ox=P.x,oy=P.y+1.6,oz=P.z;
+  let x=Math.floor(ox),y=Math.floor(oy),z=Math.floor(oz);
+  const stx=dx>0?1:-1,sty=dy>0?1:-1,stz=dz>0?1:-1;
+  const tdx=dx!==0?Math.abs(1/dx):Infinity;
+  const tdy=dy!==0?Math.abs(1/dy):Infinity;
+  const tdz=dz!==0?Math.abs(1/dz):Infinity;
+  let tmx=dx!==0?((dx>0?x+1-ox:ox-x))*tdx:Infinity;
+  let tmy=dy!==0?((dy>0?y+1-oy:oy-y))*tdy:Infinity;
+  let tmz=dz!==0?((dz>0?z+1-oz:oz-z))*tdz:Infinity;
+  let nx=0,ny=0,nz=0,t=0;
+  for(let i=0;i<80;i++){
+    const b=get(x,y,z);
+    if(b!==T_AIR&&b!==T_WATER) return {x,y,z,nx,ny,nz};
+    if(tmx<tmy&&tmx<tmz){t=tmx;tmx+=tdx;x+=stx;nx=-stx;ny=0;nz=0;}
+    else if(tmy<tmz){t=tmy;tmy+=tdy;y+=sty;nx=0;ny=-sty;nz=0;}
+    else{t=tmz;tmz+=tdz;z+=stz;nx=0;ny=0;nz=-stz;}
+    if(t>7)break;
+  }
+  return null;
+}
+function breakBlock(){
+  const h=raycast(); if(!h)return;
+  world[idx(h.x,h.y,h.z)]=T_AIR; rebuildFaces();
+}
+function placeBlock(){
+  const h=raycast(); if(!h)return;
+  const x=h.x+h.nx,y=h.y+h.ny,z=h.z+h.nz;
+  if(!inW(x,y,z))return;
+  const cur=get(x,y,z);
+  if(cur!==T_AIR&&cur!==T_WATER)return;
+  const r=0.3;
+  if(x+1>P.x-r&&x<P.x+r&&z+1>P.z-r&&z<P.z+r&&y+1>P.y&&y<P.y+1.8) return;
+  world[idx(x,y,z)]=sel; rebuildFaces();
+}
+
+// ---------- render ----------
+let Wc=0,Hc=0;
+function resize(){
+  const scale = innerWidth>1100?0.75:0.65;
+  Wc=cv.width=Math.round(innerWidth*scale);
+  Hc=cv.height=Math.round(innerHeight*scale);
+  cv.style.width="100vw"; cv.style.height="100vh";
+}
+addEventListener("resize",resize);
+const FOG=[205,232,255], FOGD=52;
+const orderArr=[];
+const depthArr=[];
+function render(){
+  const g=ctx.createLinearGradient(0,0,0,Hc*0.7);
+  g.addColorStop(0,"#5aa7ee");g.addColorStop(1,"#cde9ff");
+  ctx.fillStyle=g;ctx.fillRect(0,0,Wc,Hc);
+  const cy=Math.cos(P.yaw),sy=Math.sin(P.yaw),cp=Math.cos(P.pitch),sp=Math.sin(P.pitch);
+  const f=Hc*1.15;
+  orderArr.length=0;
+  for(let i=0;i<fcount;i++){
+    const x=fbx[i],y=fby[i],z=fbz[i],d=fdir[i];
+    const n=DIRS[d];
+    // backface cull
+    const rx=x+0.5+n[0]*0.5-P.x, ry=y+0.5+n[1]*0.5-(P.y+1.6), rz=z+0.5+n[2]*0.5-P.z;
+    if(n[0]*rx+n[1]*ry+n[2]*rz>=0) continue;
+    let ok=true, dep=0;
+    const c=CORNERS[d], pxo=i*4;
+    for(let k=0;k<4;k++){
+      const dx2=x+c[k][0]-P.x, dy2=y+c[k][1]-(P.y+1.6), dz2=z+c[k][2]-P.z;
+      const x1=dx2*cy+dz2*sy, z1=-dx2*sy+dz2*cy;
+      const y2=dy2*cp+z1*sp, z2=-dy2*sp+z1*cp;
+      const d2=-z2;
+      if(d2<0.12){ok=false;break;}
+      const sx=Wc/2+x1*f/d2, syy=Hc/2-y2*f/d2;
+      if(sx<-120||sx>Wc+120||syy<-120||syy>Hc+120){ok=false;break;}
+      pxa[pxo+k]=sx; pya[pxo+k]=syy;
+      dep+=d2;
+    }
+    if(!ok) continue;
+    dep*=0.25;
+    if(dep>FOGD) continue;
+    depthArr[i]=dep;
+    orderArr.push(i);
+  }
+  orderArr.sort((a,b)=>depthArr[b]-depthArr[a]);
+  for(let o=0;o<orderArr.length;o++){
+    const i=orderArr[o], dep=depthArr[i];
+    const d=fdir[i],t=ftype[i];
+    const col=COLS[t][d], s=fshade[i];
+    const ft=dep/FOGD, inv=1-ft;
+    let r=col[0]*s, g2=col[1]*s, b=col[2]*s;
+    r=r*inv+FOG[0]*ft; g2=g2*inv+FOG[1]*ft; b=b*inv+FOG[2]*ft;
+    if(t===T_WATER) ctx.globalAlpha=0.72;
+    ctx.fillStyle="rgb("+(r|0)+","+(g2|0)+","+(b|0)+")";
+    const pxo=i*4;
+    ctx.beginPath();
+    ctx.moveTo(pxa[pxo],pya[pxo]);
+    ctx.lineTo(pxa[pxo+1],pya[pxo+1]);
+    ctx.lineTo(pxa[pxo+2],pya[pxo+2]);
+    ctx.lineTo(pxa[pxo+3],pya[pxo+3]);
+    ctx.closePath();ctx.fill();
+    if(t===T_WATER) ctx.globalAlpha=1;
+  }
+}
+
+// highlight target block
+function renderHighlight(){
+  const h=raycast(); if(!h)return;
+  const cy=Math.cos(P.yaw),sy=Math.sin(P.yaw),cp=Math.cos(P.pitch),sp=Math.sin(P.pitch);
+  const f=Hc*1.15;
+  const pts=[];
+  for(let ci=0;ci<8;ci++){
+    const wx=h.x+(ci&1),wy=h.y+((ci>>1)&1),wz=h.z+((ci>>2)&1);
+    const dx=wx-P.x,dy=wy-(P.y+1.6),dz=wz-P.z;
+    const x1=dx*cy+dz*sy,z1=-dx*sy+dz*cy;
+    const y2=dy*cp+z1*sp,z2=-dy*sp+z1*cp;
+    const dep=-z2;
+    if(dep<0.12)return;
+    pts.push(Wc/2+x1*f/dep,Hc/2-y2*f/dep);
+  }
+  const E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+  ctx.strokeStyle="rgba(20,20,20,0.85)";ctx.lineWidth=2;
+  ctx.beginPath();
+  for(const e of E){ctx.moveTo(pts[e[0]*2],pts[e[0]*2+1]);ctx.lineTo(pts[e[1]*2],pts[e[1]*2+1]);}
+  ctx.stroke();
+}
+
+// ---------- hotbar ----------
+const palette=[T_GRASS,T_DIRT,T_STONE,T_WOOD,T_LEAF,T_SAND];
+const hotbarEl=document.getElementById("hotbar");
+function setSel(i){sel=i;updateHotbar();}
+function updateHotbar(){
+  [...hotbarEl.children].forEach((el,i)=>el.classList.toggle("sel",palette[i]===sel));
+}
+palette.forEach((t,i)=>{
+  const b=document.createElement("button");
+  b.className="slot";
+  const sc=document.createElement("canvas");sc.width=20;sc.height=20;
+  const sctx=sc.getContext("2d");
+  sctx.fillStyle="rgb("+COLS[t][0].join(",")+")";sctx.fillRect(0,0,20,20);
+  sctx.fillStyle="rgba(255,255,255,0.18)";sctx.fillRect(0,0,20,7);
+  b.appendChild(sc);
+  const sp=document.createElement("span");sp.textContent=i+1;b.appendChild(sp);
+  b.addEventListener("click",()=>setSel(t));
+  hotbarEl.appendChild(b);
+});
+setSel(T_GRASS);
+
+// ---------- loop ----------
+let lastT=performance.now();
+function tick(now){
+  const dt=Math.min(0.05,(now-lastT)/1000);lastT=now;
+  if(keys["ArrowLeft"])P.yaw-=2.2*dt;
+  if(keys["ArrowRight"])P.yaw+=2.2*dt;
+  if(keys["ArrowUp"])P.pitch=Math.min(1.45,P.pitch+1.6*dt);
+  if(keys["ArrowDown"])P.pitch=Math.max(-1.45,P.pitch-1.6*dt);
+  let fw=0,st=0;
+  if(keys["KeyW"])fw+=1; if(keys["KeyS"])fw-=1;
+  if(keys["KeyD"])st+=1; if(keys["KeyA"])st-=1;
+  const sy=Math.sin(P.yaw),cy=Math.cos(P.yaw);
+  let mx=sy*fw+cy*st, mz=-cy*fw+sy*st;
+  const ml=Math.hypot(mx,mz);
+  const eyeBlock=get(Math.floor(P.x),Math.floor(P.y+1.2),Math.floor(P.z));
+  const inWater=eyeBlock===T_WATER;
+  const spd=P.fly?12:(inWater?3.2:5.2);
+  if(ml>0){mx=mx/ml*spd;mz=mz/ml*spd;}
+  const k=Math.min(1,dt*12);
+  P.vx+=(mx-P.vx)*k; P.vz+=(mz-P.vz)*k;
+  if(P.fly){
+    let ty=0;
+    if(keys["Space"])ty=9;
+    if(keys["ShiftLeft"]||keys["ShiftRight"])ty=-9;
+    P.vy+=(ty-P.vy)*Math.min(1,dt*10);
+  }else if(inWater){
+    P.vy=keys["Space"]?3:-1.6;
+  }else{
+    P.vy-=22*dt;
+    if(keys["Space"]&&P.onGround){P.vy=8.6;P.onGround=false;}
+  }
+  const nx2=P.x+P.vx*dt;
+  if(!boxHits(nx2,P.y,P.z))P.x=nx2; else P.vx=0;
+  const nz2=P.z+P.vz*dt;
+  if(!boxHits(P.x,P.y,nz2))P.z=nz2; else P.vz=0;
+  const ny2=P.y+P.vy*dt;
+  if(!boxHits(P.x,ny2,P.z)){P.y=ny2;P.onGround=false;}
+  else{
+    if(P.vy<0)P.onGround=true;
+    P.vy=0;
+  }
+  if(P.y<-20){spawn();P.vy=0;}
+  render();
+  renderHighlight();
+  requestAnimationFrame(tick);
+}
+
+gen();
+rebuildFaces();
+resize();
+spawn();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
