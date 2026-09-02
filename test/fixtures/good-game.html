@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <style>
-body { margin: 0; overflow: hidden; width: 100vw; height: 100vh; }
+body { margin: 0; overflow: hidden; }
 #overlay { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; }
 </style>
 </head>
@@ -13,10 +13,17 @@ body { margin: 0; overflow: hidden; width: 100vw; height: 100vh; }
 </div>
 <canvas id="c"></canvas>
 <script>
-document.getElementById('start').addEventListener('click', () => {
+const canvas = document.getElementById('c');
+function resize() {
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
+}
+document.getElementById('start').addEventListener('click', function () {
   document.getElementById('overlay').style.display = 'none';
 });
-document.getElementById('c').addEventListener('pointerdown', () => {});
+canvas.addEventListener('pointerdown', () => {});
+window.addEventListener('resize', resize);
+resize();
 window.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'game-maker:dismiss-overlay') {
     document.getElementById('overlay').style.display = 'none';

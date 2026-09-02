@@ -105,7 +105,7 @@ function validateHtmlGame(content: string, issues: string[]) {
   if (/(?:^|[^\w.])innerHTML\s*=/i.test(content) || /(?:^|[^\w.])outerHTML\s*=/i.test(content)) {
     issues.push('HTML assigns to innerHTML/outerHTML: use textContent or create DOM nodes to avoid injection sinks.');
   }
-  if (/(?:^|[^\w.])eval\s*\(/i.test(content) || /(?:^|[^\w.])Function\s*\(/i.test(content)) {
+  if (/(?:^|[^\w.])eval\s*\(/i.test(content) || /(?:^|[^\w.])Function\s*\(/.test(content)) {
     issues.push('HTML uses eval()/new Function(): unsafe dynamic code execution.');
   }
   if (/(?:^|[^\w.])setTimeout\s*\(\s*["']/i.test(content) || /(?:^|[^\w.])setInterval\s*\(\s*["']/i.test(content)) {
@@ -129,7 +129,7 @@ function validateHtmlGame(content: string, issues: string[]) {
   const hasFullWidth = /\b(?:width|min-width)\s*:\s*(?:100%|100vw|100vmin|100svw)\b/i.test(bodyStyle);
   const hasFullHeight = /\b(?:height|min-height)\s*:\s*(?:100%|100vh|100vmin|100svh)\b/i.test(bodyStyle);
   const hasViewportFill = hasFullWidth || hasFullHeight;
-  const hasInnerSize = /window\.innerWidth/.test(content) && /window\.innerHeight/.test(content);
+  const hasInnerSize = /\b(?:window\.)?innerWidth\b/.test(content) && /\b(?:window\.)?innerHeight\b/.test(content);
   if (!hasOverflowHidden || !hasMargin0) {
     issues.push('Body must use margin:0 and overflow:hidden so the game fills the viewport without scrollbars.');
   }
@@ -184,7 +184,7 @@ function validateJsGame(content: string, issues: string[]) {
   if (/(?:^|[^\w.])import\s*\(\s*["']https?:/i.test(content) || /(?:^|[^\w.])import\s+["']https?:/i.test(content)) {
     issues.push('JS game imports from a remote URL: terminal games must not make network requests.');
   }
-  if (/(?:^|[^\w.])eval\s*\(/i.test(content) || /(?:^|[^\w.])Function\s*\(/i.test(content)) {
+  if (/(?:^|[^\w.])eval\s*\(/i.test(content) || /(?:^|[^\w.])Function\s*\(/.test(content)) {
     issues.push('JS game uses eval()/new Function(): unsafe dynamic code execution.');
   }
   if (/(?:^|[^\w.])setTimeout\s*\(\s*["']/i.test(content) || /(?:^|[^\w.])setInterval\s*\(\s*["']/i.test(content)) {
