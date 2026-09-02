@@ -65,7 +65,7 @@
 <div id="cross"></div>
 <div id="stats"></div>
 <div id="hotbar"></div>
-<div id="chip">Click to capture the mouse &nbsp;·&nbsp; WASD move &nbsp;·&nbsp; H for help</div>
+<div id="chip">Drag to look &nbsp;·&nbsp; WASD move &nbsp;·&nbsp; H for help</div>
 
 <div id="touch">
   <div id="stick"><div id="nub"></div></div>
@@ -882,26 +882,18 @@ function sfx(kind){
 }
 
 /* ---------------- input ---------------- */
-let mouseDown=0,mineTimer=0,placeTimer=0,locked=false;
-let dragLook=false,lastMX=0,lastMY=0,dragDist=0,lockBlocked=false;
+let mouseDown=0,mineTimer=0,placeTimer=0;
+let dragLook=false,lastMX=0,lastMY=0,dragDist=0;
 const chipEl=document.getElementById('chip');
 function hideChip(){if(!hintGone){hintGone=true;chipEl.classList.add('gone');}}
 function flashCross(){const c=document.getElementById('cross');c.classList.add('hit');
   setTimeout(()=>c.classList.remove('hit'),110);}
 function openOverlay(){overlayOpen=true;document.getElementById('overlay').classList.add('show');}
-function closeOverlay(){overlayOpen=false;document.getElementById('overlay').classList.remove('show');
-  if(!isTouch&&!lockBlocked)tryLock();}
-function tryLock(){
-  if(isTouch||lockBlocked||!canvas.requestPointerLock) return;
-  try{const r=canvas.requestPointerLock();if(r&&r.catch)r.catch(()=>{lockBlocked=true;});}
-  catch(e){lockBlocked=true;}
-}
+function closeOverlay(){overlayOpen=false;document.getElementById('overlay').classList.remove('show');}
 function look(dx,dy){
   P.yaw-=dx*0.0045;P.pitch-=dy*0.0045;
   P.pitch=Math.max(-1.553,Math.min(1.553,P.pitch));
 }
-window.addEventListener('pointerlockerror',()=>{lockBlocked=true;});
-
 window.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey) return;
   audio();
@@ -933,19 +925,13 @@ canvas.addEventListener('mousedown',e=>{
   if(overlayOpen)return;
   e.preventDefault();
   lastMX=e.clientX;lastMY=e.clientY;dragDist=0;
-  if(!locked){ dragLook=true; }
-  if(e.button===0){
-    if(locked){doBreak();mineTimer=0.26;mouseDown|=1;}
-    else if(!lockBlocked) tryLock();
-  } else if(e.button===2){
-    if(locked){doPlace();placeTimer=0.26;mouseDown|=2;}
-  } else if(e.button===1){ doPick(); }
+  dragLook=true;
+  if(e.button===0){doBreak();mineTimer=0.26;mouseDown|=1;}
+  else if(e.button===2){doPlace();placeTimer=0.26;mouseDown|=2;}
+  else if(e.button===1){doPick();}
 });
 window.addEventListener('mousemove',e=>{
-  if(locked){
-    P.yaw-=e.movementX*0.0023;P.pitch-=e.movementY*0.0023;
-    P.pitch=Math.max(-1.553,Math.min(1.553,P.pitch));
-  } else if(dragLook&&!isTouch){
+  if(dragLook&&!isTouch){
     const dx=e.clientX-lastMX,dy=e.clientY-lastMY;
     lastMX=e.clientX;lastMY=e.clientY;
     dragDist+=Math.abs(dx)+Math.abs(dy);
@@ -953,19 +939,10 @@ window.addEventListener('mousemove',e=>{
   }
 });
 window.addEventListener('mouseup',e=>{
-  if(!locked&&dragLook&&dragDist<7){
-    if(e.button===0) doBreak();
-    else if(e.button===2) doPlace();
-  }
   if(e.button===0)mouseDown&=~1;
   if(e.button===2)mouseDown&=~2;
-  if(e.pointerType!=='mouse'&&!locked) dragLook=false;
+  if(e.pointerType!=='mouse') dragLook=false;
   if(e.button===0||e.button===2) dragLook=false;
-});
-document.addEventListener('pointerlockchange',()=>{
-  locked=(document.pointerLockElement===canvas);
-  if(locked) dragLook=false;
-  else if(!isTouch&&!overlayOpen&&!lockBlocked) openOverlay();
 });
 window.addEventListener('wheel',e=>{
   if(overlayOpen)return;e.preventDefault();
@@ -1070,7 +1047,7 @@ function clock(){
 function updateStats(){
   const d=DEF[HOTBAR[slot]];
   statsEl.innerHTML=
-    '<b>BLOCKWORLD</b> '+fps+' fps · RD '+RD+(lockBlocked&&!isTouch?' · drag to look':'')+
+    '<b>BLOCKWORLD</b> '+fps+' fps · RD '+RD+
     '<br>xyz <b>'+P.x.toFixed(1)+'</b> <b>'+P.y.toFixed(1)+'</b> <b>'+P.z.toFixed(1)+'</b>'+
     (P.fly?' <b>[FLY]</b>':'')+(P.headWater?' <b>[DIVING]</b>':'')+(P.sprint&&Math.hypot(P.vx,P.vz)>6?' <b>[SPRINT]</b>':'')+
     '<br>'+clock()+' · mined '+mined+' · placed '+placed+
@@ -1272,7 +1249,7 @@ try{
   for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++) ensureChunk(scx+dx,scz+dz);
   buildHotbar();updateStats();
   setTimeout(hideChip,15000);
-  if(isTouch) openOverlay();
+  openOverlay();
   requestAnimationFrame(frame);
 }catch(e){
   errEl.style.display='flex';

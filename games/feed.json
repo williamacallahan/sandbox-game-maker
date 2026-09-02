@@ -1,39 +1,38 @@
 [
   {
-    "file": "gateway-script-smoke.html",
-    "prompt": "Create a minimal static HTML page with one centered black dot on white. Save it once, validate it, and finish.",
-    "model": "qwen3.8-27b",
-    "ts": 1788370104886,
-    "instructions": "Static page: a black dot centered on a white background.",
-    "settings": {
-      "model": "qwen3.8-27b",
-      "reasoningEffort": "none",
-      "maxToolCalls": 12,
-      "maxContextTokens": 64000,
-      "maxOutputTokens": 3000,
-      "maxCost": 1,
-      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser)\n- No frameworks, npm installs, or CDN imports.\n- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.\n- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/window.innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Interactive works must start unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: \"game-maker:dismiss-overlay\" }`.\n- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.\n- Vanilla JavaScript only.\n- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) should be issued in parallel in one step if possible.\n- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.\n- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one."
-    },
-    "stats": {
-      "provider": "llama-router-haiku-10",
-      "tokensPerSec": null,
-      "ttftMs": 8180,
-      "inputTokens": 17168,
-      "outputTokens": 1063,
-      "totalTokens": 18231,
-      "reasoningTokens": 0,
-      "toolCalls": 7,
-      "durationMs": 11504,
-      "cost": 0,
-      "upstreamCost": null
-    }
+    "file": "minecraft2.html",
+    "prompt": "a really cool Minecraft-like navigable world game",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788381144325,
+    "instructions": "WASD to move, Space to jump, Shift to sprint, F to fly. Drag the mouse to look. Left-click breaks blocks, right-click places, middle-click picks. 1-9 or mouse wheel selects a block. H or Esc opens help."
   },
   {
-    "file": "purple-triangle.html",
-    "prompt": "Create an interactive purple triangle artwork with cursor-driven rainbow paint splatters.",
-    "model": "SWE-1.7",
-    "ts": 1788370017281,
-    "instructions": "Move the pointer or drag a finger to paint rainbow splatters. Click or tap for a larger burst. Press Space to clear the canvas."
+    "file": "zelda-cave-arena.html",
+    "prompt": "make a fun Zelda cave arena game",
+    "model": "qwen/qwen3.8-27b",
+    "ts": 1788381061213,
+    "instructions": "WASD / arrows to run, SPACE / J / click to slash. Slay the giant octorok, then descend deeper. Touch: left stick + sword button."
+  },
+  {
+    "file": "solar-system-poster.html",
+    "prompt": "a beautiful solar system reference poster",
+    "model": "anthropic/claude-sonnet-4.6",
+    "ts": 1788381061207,
+    "instructions": "Static reference poster of the solar system. Scroll to explore planet details."
+  },
+  {
+    "file": "cat.html",
+    "prompt": "make a cute interactive cat",
+    "model": "anthropic/claude-sonnet-4.6",
+    "ts": 1788381061190,
+    "instructions": "Click the cat to pet it and fill the purr bar with love."
+  },
+  {
+    "file": "counter.html",
+    "prompt": "a simple counter app",
+    "model": "anthropic/claude-sonnet-4.6",
+    "ts": 1788381061190,
+    "instructions": "Click the + button to count up."
   },
   {
     "file": "snowball-fight.html",
@@ -160,7 +159,7 @@
     "prompt": "Make a really fun racing game, with the ability to pause the game",
     "model": "openai/gpt-5.6-luna-pro",
     "ts": 1788322702539,
-    "instructions": "Steer with \u2190 \u2192 or A/D and dodge traffic. Your speed and distance build over time. Press P, Space, or the PAUSE button to pause; resume with the button.",
+    "instructions": "Steer with ← → or A/D and dodge traffic. Your speed and distance build over time. Press P, Space, or the PAUSE button to pause; resume with the button.",
     "settings": {
       "model": "openai/gpt-5.6-luna-pro",
       "reasoningEffort": null,
@@ -189,7 +188,7 @@
     "prompt": "Make a fun game about Sammy the bird, as written by the author V Moua, and his bird adventures",
     "model": "qwen/qwen3.8-flash",
     "ts": 1788321728057,
-    "instructions": "Flap Sammy the Bird through his big-sky adventure! Tap, click, or press SPACE / ARROW-UP / W to flap. Grab golden berries (+5 each), squeeze through the leafy branch gaps, and dodge the grumpy storm clouds. Hit the ground or a branch and the chapter ends \u2014 press SPACE or click to fly again. Score grows with distance and berries.",
+    "instructions": "Flap Sammy the Bird through his big-sky adventure! Tap, click, or press SPACE / ARROW-UP / W to flap. Grab golden berries (+5 each), squeeze through the leafy branch gaps, and dodge the grumpy storm clouds. Hit the ground or a branch and the chapter ends — press SPACE or click to fly again. Score grows with distance and berries.",
     "settings": {
       "model": "qwen/qwen3.8-flash",
       "reasoningEffort": null,
@@ -247,7 +246,7 @@
     "prompt": "Make a really fun airplane game, with the ability to pause the game",
     "model": "qwen/qwen3.8-flash",
     "ts": 1788321308368,
-    "instructions": "Steer with WASD / Arrows / mouse / finger drag. Space, click or tap shoots. Grab stars & hearts, pop balloons, birds and enemy jets, don't crash. Pause any time with P, Esc or the \u275a\u275a button (auto-pauses if you switch tabs).",
+    "instructions": "Steer with WASD / Arrows / mouse / finger drag. Space, click or tap shoots. Grab stars & hearts, pop balloons, birds and enemy jets, don't crash. Pause any time with P, Esc or the ❚❚ button (auto-pauses if you switch tabs).",
     "settings": {
       "model": "qwen/qwen3.8-flash",
       "reasoningEffort": "xhigh",
@@ -276,7 +275,7 @@
     "prompt": "Make a really fun racing crash derby game, with the ability to pause the game",
     "model": "z-ai/glm-5.3-flash",
     "ts": 1788320954561,
-    "instructions": "Drive with WASD or Arrow keys, hit SPACE for nitro boost, and ram rival cars until they explode \u2014 the harder the hit, the more damage and points. Clearing a wave spawns a bigger one. Your armor is limited, so dodge head-on hits from faster rivals. Press P or ESC (or the PAUSE button) to pause and resume.",
+    "instructions": "Drive with WASD or Arrow keys, hit SPACE for nitro boost, and ram rival cars until they explode — the harder the hit, the more damage and points. Clearing a wave spawns a bigger one. Your armor is limited, so dodge head-on hits from faster rivals. Press P or ESC (or the PAUSE button) to pause and resume.",
     "settings": {
       "model": "z-ai/glm-5.3-flash",
       "reasoningEffort": null,
@@ -363,7 +362,7 @@
     "prompt": "make a Zelda game",
     "model": "qwen/qwen3.8-27b",
     "ts": 1788318490438,
-    "instructions": "Move with WASD / arrow keys, attack with SPACE / J. On touch: left half = joystick, right half = strike. Slash the blobs, grab hearts, gems, coins and the sword upgrade; once foes drop to 2 or fewer the altar activates \u2014 step on it to win. R or click to restart.",
+    "instructions": "Move with WASD / arrow keys, attack with SPACE / J. On touch: left half = joystick, right half = strike. Slash the blobs, grab hearts, gems, coins and the sword upgrade; once foes drop to 2 or fewer the altar activates — step on it to win. R or click to restart.",
     "settings": {
       "model": "qwen/qwen3.8-27b",
       "reasoningEffort": "medium",
@@ -450,7 +449,7 @@
     "prompt": "make an AMAZING creative game",
     "model": "qwen/qwen3.8-27b",
     "ts": 1788315424185,
-    "instructions": "Move your mouse or finger to guide the last firefly through the dark meadow. Eat glowing light motes to restore your fading glow and build combo multipliers, but dodge the dark bats \u2014 they steal your light. If the light bar at the top empties, the night wins. Score as many motes as you can; best score is saved. Press M to toggle sound.",
+    "instructions": "Move your mouse or finger to guide the last firefly through the dark meadow. Eat glowing light motes to restore your fading glow and build combo multipliers, but dodge the dark bats — they steal your light. If the light bar at the top empties, the night wins. Score as many motes as you can; best score is saved. Press M to toggle sound.",
     "settings": {
       "model": "qwen/qwen3.8-27b",
       "reasoningEffort": "medium",
@@ -459,7 +458,7 @@
       "maxOutputTokens": 36000,
       "maxReasoningTokens": null,
       "maxCost": 1,
-      "systemPrompt": "You build small, self-contained creative works from a single prompt.\n\nRules:\n- Build the thing the request asks for, then save it. Always finish with a saved file, never with prose alone.\n- Read a short request as the subject of the thing to build. \"cat\" means build a cat, not answer a question about cats.\n- There are two ways to build it, and the request decides which:\n  - Something to play with \u2014 a toy, a game, a fidget, a creature, a simulation, a scene that moves or answers touch \u2014 is an interactive .html file (or a plain .js file runnable with `bun file.js` for terminal play).\n  - Anything else \u2014 a poster, a chart, a dashboard, a reference card, a page to read \u2014 is a static .html file.\n- When a request could be either, build the interactive one. It is the better medium for anything that moves.\n- One self-contained file that runs with zero build steps. Inline every style and script. Make no external requests of any kind: no CDN, no web fonts, no images by URL, no npm installs. The file runs with no network, so anything fetched is simply missing.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Vanilla JavaScript only. Draw images with CSS, SVG, or canvas, or embed them as data URIs.\n- Save the finished work with the save_game tool using a short kebab-case filename.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line telling the user how to open or play it. Nothing else.\n- A small complete work beats a large broken one."
+      "systemPrompt": "You build small, self-contained creative works from a single prompt.\n\nRules:\n- Build the thing the request asks for, then save it. Always finish with a saved file, never with prose alone.\n- Read a short request as the subject of the thing to build. \"cat\" means build a cat, not answer a question about cats.\n- There are two ways to build it, and the request decides which:\n  - Something to play with — a toy, a game, a fidget, a creature, a simulation, a scene that moves or answers touch — is an interactive .html file (or a plain .js file runnable with `bun file.js` for terminal play).\n  - Anything else — a poster, a chart, a dashboard, a reference card, a page to read — is a static .html file.\n- When a request could be either, build the interactive one. It is the better medium for anything that moves.\n- One self-contained file that runs with zero build steps. Inline every style and script. Make no external requests of any kind: no CDN, no web fonts, no images by URL, no npm installs. The file runs with no network, so anything fetched is simply missing.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Vanilla JavaScript only. Draw images with CSS, SVG, or canvas, or embed them as data URIs.\n- Save the finished work with the save_game tool using a short kebab-case filename.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line telling the user how to open or play it. Nothing else.\n- A small complete work beats a large broken one."
     },
     "stats": {
       "provider": "Chutes",
@@ -479,7 +478,7 @@
     "prompt": "make an AMAZING creative game",
     "model": "qwen/qwen3.8-flash",
     "ts": 1788314571568,
-    "instructions": "ECHO HARVEST \u2014 a time-loop harvesting game. Move with WASD / arrow keys (or hold LEFT MOUSE to steer). Grab glowing shards for score and chain pickups for a multiplier. Every 14 seconds time resets and an \"echo\" of your last run replays forever, still collecting \u2014 but rotating blades keep multiplying and speeding up. Press SPACE to spend 4 charge and slow time (BLOOM). Press M to mute, R to retry. Survive as long as you can.",
+    "instructions": "ECHO HARVEST — a time-loop harvesting game. Move with WASD / arrow keys (or hold LEFT MOUSE to steer). Grab glowing shards for score and chain pickups for a multiplier. Every 14 seconds time resets and an \"echo\" of your last run replays forever, still collecting — but rotating blades keep multiplying and speeding up. Press SPACE to spend 4 charge and slow time (BLOOM). Press M to mute, R to retry. Survive as long as you can.",
     "settings": {
       "model": "qwen/qwen3.8-flash",
       "reasoningEffort": null,
@@ -488,7 +487,7 @@
       "maxOutputTokens": null,
       "maxReasoningTokens": null,
       "maxCost": 1,
-      "systemPrompt": "You build small, self-contained creative works from a single prompt.\n\nRules:\n- Build the thing the request asks for, then save it. Always finish with a saved file, never with prose alone.\n- Read a short request as the subject of the thing to build. \"cat\" means build a cat, not answer a question about cats.\n- There are two ways to build it, and the request decides which:\n  - Something to play with \u2014 a toy, a game, a fidget, a creature, a simulation, a scene that moves or answers touch \u2014 is an interactive .html file (or a plain .js file runnable with `bun file.js` for terminal play).\n  - Anything else \u2014 a poster, a chart, a dashboard, a reference card, a page to read \u2014 is a static .html file.\n- When a request could be either, build the interactive one. It is the better medium for anything that moves.\n- One self-contained file that runs with zero build steps. Inline every style and script. Make no external requests of any kind: no CDN, no web fonts, no images by URL, no npm installs. The file runs with no network, so anything fetched is simply missing.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Vanilla JavaScript only. Draw images with CSS, SVG, or canvas, or embed them as data URIs.\n- Save the finished work with the save_game tool using a short kebab-case filename.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line telling the user how to open or play it. Nothing else.\n- A small complete work beats a large broken one."
+      "systemPrompt": "You build small, self-contained creative works from a single prompt.\n\nRules:\n- Build the thing the request asks for, then save it. Always finish with a saved file, never with prose alone.\n- Read a short request as the subject of the thing to build. \"cat\" means build a cat, not answer a question about cats.\n- There are two ways to build it, and the request decides which:\n  - Something to play with — a toy, a game, a fidget, a creature, a simulation, a scene that moves or answers touch — is an interactive .html file (or a plain .js file runnable with `bun file.js` for terminal play).\n  - Anything else — a poster, a chart, a dashboard, a reference card, a page to read — is a static .html file.\n- When a request could be either, build the interactive one. It is the better medium for anything that moves.\n- One self-contained file that runs with zero build steps. Inline every style and script. Make no external requests of any kind: no CDN, no web fonts, no images by URL, no npm installs. The file runs with no network, so anything fetched is simply missing.\n- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Vanilla JavaScript only. Draw images with CSS, SVG, or canvas, or embed them as data URIs.\n- Save the finished work with the save_game tool using a short kebab-case filename.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line telling the user how to open or play it. Nothing else.\n- A small complete work beats a large broken one."
     },
     "stats": {
       "provider": "Alibaba",
@@ -508,7 +507,7 @@
     "prompt": "make something really fun and colorful with bunnies that's fun to play",
     "model": "qwen/qwen3.8-27b",
     "ts": 1788314312360,
-    "instructions": "Tap or click bunnies as they pop out of the holes to score points. Avoid the red fox! Higher-value bunnies (pink, purple, gold) are worth more. You have 30 seconds \u2014 go fast!",
+    "instructions": "Tap or click bunnies as they pop out of the holes to score points. Avoid the red fox! Higher-value bunnies (pink, purple, gold) are worth more. You have 30 seconds — go fast!",
     "settings": {
       "model": "qwen/qwen3.8-27b",
       "reasoningEffort": "low",
@@ -560,48 +559,6 @@
     }
   },
   {
-    "file": "dogfood-dot.html",
-    "prompt": "a single blue dot that follows the mouse",
-    "model": "anthropic/claude-haiku-4.5",
-    "ts": 1788311369552,
-    "settings": {
-      "model": "anthropic/claude-haiku-4.5",
-      "reasoningEffort": "none",
-      "maxToolCalls": 8,
-      "maxCost": 1,
-      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
-      "maxContextTokens": 37500
-    }
-  },
-  {
-    "file": "dogfood-breakout.html",
-    "prompt": "a breakout clone with three levels, particle effects on brick hits, and a scoreboard",
-    "model": "anthropic/claude-sonnet-4.6",
-    "ts": 1788311028186,
-    "settings": {
-      "model": "anthropic/claude-sonnet-4.6",
-      "reasoningEffort": "medium",
-      "maxToolCalls": 8,
-      "maxCost": 1,
-      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
-      "maxContextTokens": 37500
-    }
-  },
-  {
-    "file": "dogfood-pong.html",
-    "prompt": "a minimal pong game, one paddle, mouse control",
-    "model": "anthropic/claude-haiku-4.5",
-    "ts": 1788310743185,
-    "settings": {
-      "model": "anthropic/claude-haiku-4.5",
-      "reasoningEffort": "low",
-      "maxToolCalls": 8,
-      "maxCost": 1,
-      "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
-      "maxContextTokens": 37500
-    }
-  },
-  {
     "file": "snake.html",
     "prompt": "a snake game with wrap-around walls",
     "model": "anthropic/claude-sonnet-4.6",
@@ -613,6 +570,7 @@
       "maxCost": 1,
       "systemPrompt": "You generate small, playable one-shot games from a single prompt.\n\nRules:\n- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser), or a plain .js file runnable with `bun file.js` for terminal games.\n- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports unless the prompt explicitly asks for one.\n- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.\n- Save the finished game with the save_game tool using a short kebab-case filename. Independent tool calls (e.g. list_dir while drafting, or saving two variants) may be issued in parallel in one step.\n- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.\n- After saving, reply with the saved path and one line of play instructions. Nothing else.\n- A small complete game beats a large broken one.",
       "maxContextTokens": 37500
-    }
+    },
+    "instructions": "Arrow keys or WASD to steer. Walls wrap around. Eat food to grow and score. Press any key to start or restart."
   }
 ]
