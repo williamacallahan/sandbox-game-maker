@@ -225,7 +225,7 @@ export async function runAgent(
     const durationMs = Date.now() - startedAt;
     let gatewayCost: number | null = null;
     if (config.baseUrl && cacheKey && providerFromHeaders) {
-      const usageUrl = new URL('api/usage/session', config.baseUrl.replace(/\/?$/, '/'));
+      const usageUrl = new URL('../api/usage/session', config.baseUrl);
       usageUrl.searchParams.set('cache_key', cacheKey);
       try {
         for (let attempt = 0; attempt < 3; attempt++) {
