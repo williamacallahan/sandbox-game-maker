@@ -107,6 +107,18 @@ function validateHtmlGame(path: string, content: string, issues: string[]) {
   if (/(?:^|[^\w.])(?:window|globalThis)\s*\.\s*(?:localStorage|sessionStorage)\s*[.(]/i.test(content)) {
     issues.push('HTML accesses localStorage/sessionStorage through window/globalThis: storage APIs throw in the gallery iframe.');
   }
+  if (/(?:^|[^\w.])innerHTML\s*=/i.test(content) || /(?:^|[^\w.])outerHTML\s*=/i.test(content)) {
+    issues.push('HTML assigns to innerHTML/outerHTML: use textContent or create DOM nodes to avoid injection sinks.');
+  }
+  if (/(?:^|[^\w.])eval\s*\(/i.test(content) || /(?:^|[^\w.])Function\s*\(/i.test(content)) {
+    issues.push('HTML uses eval()/new Function(): unsafe dynamic code execution.');
+  }
+  if (/(?:^|[^\w.])setTimeout\s*\(\s*["']/i.test(content) || /(?:^|[^\w.])setInterval\s*\(\s*["']/i.test(content)) {
+    issues.push('HTML passes a string to setTimeout/setInterval: unsafe dynamic code execution.');
+  }
+  if (/(?:^|[^\w.])document\s*\.\s*write\s*\(/i.test(content)) {
+    issues.push('HTML calls document.write(): unsafe DOM manipulation.');
+  }
 
   // Fill the square viewport.
   const bodyTag = /<body([^>]*)>/i.exec(content);
@@ -176,6 +188,12 @@ function validateJsGame(path: string, content: string, issues: string[]) {
   if (/(?:^|[^\w.])XMLHttpRequest/i.test(content)) issues.push('JS game uses XMLHttpRequest: terminal games must not make network requests.');
   if (/(?:^|[^\w.])import\s*\(\s*["']https?:/i.test(content) || /(?:^|[^\w.])import\s+["']https?:/i.test(content)) {
     issues.push('JS game imports from a remote URL: terminal games must not make network requests.');
+  }
+  if (/(?:^|[^\w.])eval\s*\(/i.test(content) || /(?:^|[^\w.])Function\s*\(/i.test(content)) {
+    issues.push('JS game uses eval()/new Function(): unsafe dynamic code execution.');
+  }
+  if (/(?:^|[^\w.])setTimeout\s*\(\s*["']/i.test(content) || /(?:^|[^\w.])setInterval\s*\(\s*["']/i.test(content)) {
+    issues.push('JS game passes a string to setTimeout/setInterval: unsafe dynamic code execution.');
   }
 }
 

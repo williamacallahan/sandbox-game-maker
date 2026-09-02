@@ -18,10 +18,13 @@ export type AgentEvent =
   | { type: 'turn_end' }
   | { type: 'done'; durationMs: number; stats: RunStats };
 
-export type TurnUsage = {
+export type BaseUsage = {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+};
+
+export type TurnUsage = BaseUsage & {
   reasoningTokens?: number;
   cachedTokens?: number;
   cost?: number;
@@ -30,7 +33,7 @@ export type TurnUsage = {
 };
 
 /** Per-run generation metadata, shown by the UI and CLI after a run. */
-export type RunStats = {
+export type RunStats = BaseUsage & {
   /** Provider that served the final generation (OpenRouter /generation metadata). */
   provider: string | null;
   /** Decode speed of the final generation in tokens/second (from /generation). */
@@ -38,9 +41,6 @@ export type RunStats = {
   /** Time to first streamed text/reasoning delta in ms; null when not streaming. */
   ttftMs: number | null;
   /** Run-wide totals aggregated across every model call. */
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
   reasoningTokens: number;
   toolCalls: number;
   durationMs: number;
