@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Budget } from '../src/tools.js';
+import { Budget, validateGameFile } from '../src/tools.js';
 import { CREATE_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
 
 describe('Budget', () => {
@@ -51,6 +51,33 @@ describe('loadConfig', () => {
       expect(() => loadConfig()).toThrow('OPENROUTER_API_KEY');
     } finally {
       if (key) process.env.OPENROUTER_API_KEY = key;
+    }
+  });
+});
+
+describe('validateGameFile', () => {
+  test('passes a valid interactive HTML game', async () => {
+    const { valid, issues } = await validateGameFile('test/fixtures/good-game.html');
+    expect(issues).toEqual([]);
+    expect(valid).toBe(true);
+  });
+
+  test('rejects a game that references external resources', async () => {
+    const { valid, issues } = await validateGameFile('test/fixtures/bad-network.html');
+    expect(valid).toBe(false);
+    expect(issues.some((i) => i.includes('External media'))).toBe(true);
+  });
+
+  test('rejects a game with a non-dismissible overlay', async () => {
+    const { valid, issues } = await validateGameFile('test/fixtures/bad-overlay.html');
+    expect(valid).toBe(false);
+    expect(issues.some((i) => i.includes('data-game-overlay'))).toBe(true);
+  });
+
+  test('prompts require post-save validation', () => {
+    const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
+    for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT]) {
+      expect(prompt).toContain('validate_game');
     }
   });
 });
