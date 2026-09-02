@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { CREATE_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
 import { runAgent, type RunStats } from './agent.js';
-import { GAME_FILENAME } from './tools.js';
+import { CHARS_PER_TOKEN, GAME_FILENAME } from './tools.js';
 
 const defaults = loadConfig({}, { skipApiKey: true });
 const FEED_PATH = join(defaults.outDir, 'feed.json');
@@ -40,6 +40,9 @@ function readFeed(): Post[] {
 // ponytail: cached for the server's lifetime; restart to refresh the model list.
 let modelsCache: string | null = null;
 
+const playerHtml = readFileSync(new URL('./player.html', import.meta.url), 'utf-8');
+const PLAYER_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'none'; img-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'";
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
@@ -63,6 +66,7 @@ const server = Bun.serve({
         maxContextTokens: defaults.maxContextTokens,
         maxCost: defaults.maxCost,
         reasoningEfforts: REASONING_EFFORTS,
+        charsPerToken: CHARS_PER_TOKEN,
         defaultPrompt: 'a snake game with wrap-around walls',
       });
     }
@@ -94,8 +98,21 @@ const server = Bun.serve({
     if (game) {
       const file = Bun.file(join(defaults.outDir, game[1]));
       if (!(await file.exists())) return new Response('not found', { status: 404 });
-      // .js terminal games are served as text so the UI can show them as code.
-      return new Response(file, { headers: { 'content-type': game[2] === 'html' ? 'text/html' : 'text/plain' } });
+      // .js terminal games play in the browser: ?play wraps them in the xterm.js
+      // runner and loads the source as a sandboxed external script.
+      if (game[2] === 'js' && url.searchParams.has('play')) {
+        const html = playerHtml.replace('__GAME_URL__', `/games/${game[1]}`);
+        return new Response(html, {
+          headers: {
+            'content-type': 'text/html',
+            'content-security-policy': PLAYER_CSP,
+          },
+        });
+      }
+      // Bare .js doubles as the runner's <script src> — a real script MIME is
+      // required: the sandboxed page's opaque origin makes the fetch
+      // cross-origin, and browsers (ORB) block text/plain scripts there.
+      return new Response(file, { headers: { 'content-type': game[2] === 'html' ? 'text/html' : 'text/javascript' } });
     }
 
     if (url.pathname === '/api/generate' && req.method === 'POST') {

@@ -14,8 +14,6 @@
 <div id="term"></div>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js" integrity="sha384-J4qzUjBl1FxyLsl/kQPQIOeINsmp17OHYXDOMpMxlKX53ZfYsL+aWHpgArvOuof9" crossorigin="anonymous"></script>
 <script>
-const SRC = __GAME__;
-
 // Terminal games draw up to ~96x40 frames; open a fixed oversized grid and
 // scale the whole terminal to fit the iframe instead of reflowing the game.
 const COLS = 110, ROWS = 44;
@@ -30,13 +28,14 @@ addEventListener('resize', fit);
 requestAnimationFrame(fit);
 
 // Minimal Node shims: enough for process.stdout/stdin raw-mode terminal games
-// and require("readline") keypress events. Games run via new Function below.
+// and require("readline") keypress events.
 const EXIT = { exit: true };
 const stdinListeners = { data: [], keypress: [] };
 let sigint = null;
+const write = (s) => { term.write(s); return true; };
 const proc = {
-  stdout: { write(s) { term.write(s); return true; }, columns: COLS, rows: ROWS, isTTY: true },
-  stderr: { write(s) { term.write(s); return true; }, isTTY: true },
+  stdout: { write, columns: COLS, rows: ROWS, isTTY: true },
+  stderr: { write, isTTY: true },
   stdin: {
     isTTY: true,
     setRawMode() { return this; }, resume() { return this; }, pause() { return this; }, setEncoding() { return this; },
@@ -81,15 +80,19 @@ const readline = {
   createInterface: () => ({ question() {}, close() {}, on() { return this; } }),
 };
 const requireShim = (m) => (m.replace('node:', '') === 'readline' ? readline : {});
-const consoleShim = { ...console, log: (...a) => term.writeln(a.map(String).join(' ')), error: (...a) => term.writeln(a.map(String).join(' ')) };
-
-try {
-  const runGame = new Function('require', 'process', 'console', 'module', 'exports', SRC); // NOSONAR -- server CSP sandboxes generated code in an opaque origin with network access denied.
-  runGame(requireShim, proc, consoleShim, { exports: {} }, {});
-} catch (e) {
-  if (e !== EXIT) term.writeln('\r\n\x1b[31m' + (e && e.stack || e) + '\x1b[0m');
-}
-term.focus();
+const writeLine = (...a) => term.writeln(a.map(String).join(' '));
+const consoleShim = { ...console, log: writeLine, error: writeLine };
+globalThis.require = requireShim;
+globalThis.process = proc;
+globalThis.console = consoleShim;
+globalThis.module = { exports: {} };
+globalThis.exports = globalThis.module.exports;
+addEventListener('error', (event) => {
+  if (event.error !== EXIT) term.writeln('\r\n\x1b[31m' + (event.error?.stack ?? event.message) + '\x1b[0m');
+  event.preventDefault();
+});
 </script>
+<script src="__GAME_URL__"></script>
+<script>term.focus();</script>
 </body>
 </html>

@@ -158,7 +158,7 @@ function detailsPanel(p) {
     ['model', s.model],
     ['reasoning', s.reasoningEffort ?? 'model default'],
     ['max tool calls', s.maxToolCalls],
-    ['max context tokens', s.maxContextTokens ?? s.maxContextChars],
+    ['max context tokens', s.maxContextTokens],
     ...(s.maxOutputTokens ? [['max output tokens', s.maxOutputTokens]] : []),
     ...(s.maxReasoningTokens ? [['max reasoning tokens', s.maxReasoningTokens]] : []),
     ['max cost', '$' + s.maxCost],
@@ -183,10 +183,10 @@ function postCard(p) {
   card.dataset.file = p.file;
   const name = p.file;
   const isJs = p.file.endsWith('.js');
-  const media = isJs
-    ? '<div class="media"><pre data-src="/games/' + p.file + '">loading…</pre></div>'
-    : '<div class="media"><iframe src="/games/' + p.file + '" sandbox="allow-scripts allow-pointer-lock" loading="lazy" title="' + esc(name) + '"></iframe></div>';
-  const terminalSuffix = isJs ? ' · terminal game — run: bun games/' + esc(p.file) : '';
+  // .js terminal games play in the page via the server's ?play xterm runner.
+  const src = '/games/' + p.file + (isJs ? '?play=1' : '');
+  const media = '<div class="media"><iframe src="' + src + '" sandbox="allow-scripts allow-pointer-lock" loading="lazy" title="' + esc(name) + '"></iframe></div>';
+  const terminalSuffix = isJs ? ' · terminal game' : '';
   const modelTag = p.model ? '<span class="model">' + esc(p.model) + terminalSuffix + '</span>' : '';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
@@ -195,15 +195,13 @@ function postCard(p) {
     '<div class="detail-panel" hidden>' + detailsPanel(p) + '</div>' +
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
-    '<a href="/games/' + p.file + '" target="_blank" title="open full size">' + OPEN + '</a></div>' +
+    '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a></div>' +
     '<div class="caption"><b>' + esc(name) + '</b>' + esc(p.prompt) + modelTag + '</div>';
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   $('.details-btn', card).addEventListener('click', () => {
     const panel = $('.detail-panel', card);
     panel.hidden = !panel.hidden;
   });
-  const pre = $('pre[data-src]', card);
-  if (pre) fetch(pre.dataset.src).then((r) => r.text()).then((t) => { pre.textContent = t; });
   return card;
 }
 
@@ -241,7 +239,7 @@ function handleGenerationEvent(e, state, log, status) {
   } else if (e.type === 'reasoning') {
     state.reasoningChars += e.delta.length;
     log(e.delta, 'think');
-    status('thinking… ~' + Math.ceil(state.reasoningChars / 4) + ' reasoning tokens');
+    status('thinking… ~' + Math.ceil(state.reasoningChars / cfg.charsPerToken) + ' reasoning tokens');
   } else if (e.type === 'tool_call') {
     state.toolCalls++;
     log('\n[' + e.name + '] ' + (e.args.filename ?? e.args.path ?? '') + '\n', 'tool');
