@@ -43,6 +43,32 @@
   .settings input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px/1.4 ui-monospace, Menlo, monospace; color: var(--text); }
   .settings input:focus { outline: none; border-color: #a8a8a8; background: #fff; }
   .settings select { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px/1.4 ui-monospace, Menlo, monospace; color: var(--text); }
+  .settings .tip { display: inline-block; position: relative; margin-left: 4px; width: 14px; height: 14px; line-height: 14px; text-align: center; border-radius: 50%; background: var(--border); color: var(--muted); font-size: 10px; cursor: help; }
+  .settings .tip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 220px;
+    width: max-content;
+    padding: 6px 8px;
+    background: #111;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.4;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+    white-space: normal;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 10;
+  }
+  .settings .tip:hover::after { opacity: 1; }
   .stream .think { color: #8e8e8e; font-style: italic; }
   .chips { display: flex; gap: 6px; padding: 6px 12px 0; }
   .chip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
@@ -107,13 +133,13 @@
       <textarea id="system"></textarea>
       <div class="settings">
         <div class="wide"><label for="model">Model</label><input id="model" list="model-list" placeholder="type to search models…"><datalist id="model-list"></datalist></div>
-        <div><label for="maxToolCalls">Max tool calls</label><input id="maxToolCalls" type="number" min="1" step="1"></div>
-        <div><label for="maxCost">Max cost (USD)</label><input id="maxCost" type="number" min="0.05" step="0.05"></div>
-        <div class="wide"><label for="maxContextTokens">Max context tokens</label><input id="maxContextTokens" type="number" min="1000" step="1000"></div>
-        <div><label for="maxOutputTokens">Max output tokens</label><input id="maxOutputTokens" type="number" min="1" step="1" placeholder="model default"></div>
-        <div><label for="maxReasoningTokens">Max reasoning tokens</label><input id="maxReasoningTokens" type="number" min="1" step="1" placeholder="model default"></div>
+        <div><label for="maxToolCalls">Max tool calls <span class="tip" data-tooltip="Per-chat cap: total tool calls allowed across the whole run.">?</span></label><input id="maxToolCalls" type="number" min="1" step="1"></div>
+        <div><label for="maxCost">Max cost (USD) <span class="tip" data-tooltip="Per-chat cap: total spend in USD allowed across the whole run. Enforced after each step, so a single expensive step can slightly exceed it.">?</span></label><input id="maxCost" type="number" min="0.05" step="0.05"></div>
+        <div class="wide"><label for="maxContextTokens">Max context tokens <span class="tip" data-tooltip="Per-chat cap: total tokens available for the prompt + tool results + model output across the whole run. Larger values keep more history but cost more.">?</span></label><input id="maxContextTokens" type="number" min="1000" step="1000"></div>
+        <div><label for="maxOutputTokens">Max output tokens <span class="tip" data-tooltip="Per-message cap: maximum tokens the model may generate in a single response. Does not include reasoning or tool-call tokens.">?</span></label><input id="maxOutputTokens" type="number" min="1" step="1" placeholder="model default"></div>
+        <div><label for="maxReasoningTokens">Max reasoning tokens <span class="tip" data-tooltip="Per-message cap: maximum reasoning tokens the model may use in a single response.">?</span></label><input id="maxReasoningTokens" type="number" min="1" step="1" placeholder="model default"></div>
         <div><label for="reasoningEffort">Reasoning</label><select id="reasoningEffort"><option value="">model default</option></select></div>
-        <div><label for="filename">Filename</label><input id="filename" placeholder="auto — e.g. snake.html" pattern="[a-z0-9][a-z0-9-]*\.(html|js)"></div>
+        <div><label for="filename">Filename</label><input id="filename" placeholder="auto — e.g. my-game.html" pattern="[a-z0-9][a-z0-9-]*\.(html|js)" title="lowercase kebab-case, no underscores, ending in .html or .js"></div>
       </div>
     </details>
     <div class="composer-foot"><button id="post-btn" disabled>Post</button></div>
@@ -402,7 +428,7 @@ const feedPromise = loadFeed();
 cfg = await fetch('/api/config').then((r) => r.json());
 systemEl.value = cfg.systemPrompt;
 promptEl.value = cfg.defaultPrompt;
-for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxCost']) $('#' + key).value = cfg[key];
+for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxOutputTokens', 'maxCost']) $('#' + key).value = cfg[key];
 syncEfforts();
 postBtn.disabled = false;
 await feedPromise;

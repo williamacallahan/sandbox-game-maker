@@ -143,7 +143,7 @@ const server = Bun.serve({
 
       const wantedFile = typeof body.filename === 'string' && body.filename.trim() ? body.filename.trim() : null;
       if (wantedFile && !GAME_FILENAME.test(wantedFile)) {
-        return json({ error: `filename must be kebab-case ending in .html or .js, e.g. "snake.html"` }, 400);
+        return json({ error: `filename must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
       }
 
       let config: AgentConfig;

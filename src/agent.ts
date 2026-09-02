@@ -1,8 +1,9 @@
 import { OpenRouter } from '@openrouter/agent';
 import type { Item } from '@openrouter/agent';
+import { stepCountIs, maxCost } from '@openrouter/agent/stop-conditions';
+import type { BeforeRequestHook } from '@openrouter/sdk/hooks/types.js';
 import { generationsGetGeneration } from '@openrouter/sdk/funcs/generationsGetGeneration.js';
 import { unwrapAsync } from '@openrouter/sdk/types/fp.js';
-import { stepCountIs, maxCost } from '@openrouter/agent/stop-conditions';
 import type { AgentConfig } from './config.js';
 import { Budget, makeTools } from './tools.js';
 
@@ -35,6 +36,22 @@ export type RunStats = {
 };
 
 /**
+ * Build an OpenRouter client that opts into router metadata on every model
+ * response. The metadata includes the selected provider, so we can report it
+ * synchronously instead of relying on the async /generation endpoint.
+ */
+function createClient(config: AgentConfig): OpenRouter {
+  const metadataHook: BeforeRequestHook = {
+    beforeRequest: (_ctx, request) => {
+      const headers = new Headers(request.headers);
+      headers.set('X-OpenRouter-Metadata', 'enabled');
+      return new Request(request, { headers });
+    },
+  };
+  return new OpenRouter({ apiKey: config.apiKey, hooks: metadataHook });
+}
+
+/**
  * Fetch OpenRouter's request/usage metadata for a generation. The record lands
  * asynchronously, typically ~5s after the response completes, so poll at
  * ~2s/5s/8s. Best-effort: failure returns null and the run reports without it.
@@ -55,7 +72,7 @@ export async function runAgent(
   options?: { onEvent?: (event: AgentEvent) => void; signal?: AbortSignal },
 ) {
   const startedAt = Date.now();
-  const client = new OpenRouter({ apiKey: config.apiKey });
+  const client = createClient(config);
 
   const promptChars = typeof input === 'string' ? input.length : input.reduce((n, m) => n + m.content.length, 0);
   const budget = new Budget(config.maxToolCalls, config.maxContextTokens, promptChars);
@@ -64,8 +81,8 @@ export async function runAgent(
     {
       model: config.model,
       instructions: config.systemPrompt,
-      // Route to the highest-throughput provider for the model (no load balancing).
-      provider: { sort: 'throughput' },
+      // Prefer Groq for the model, but allow OpenRouter to fall back if Groq is unavailable.
+      provider: { order: ['groq','venice'], allowFallbacks: true },
       ...(config.maxOutputTokens && { maxOutputTokens: config.maxOutputTokens }),
       // loadConfig rejects effort + maxReasoningTokens together, so at most one is set here.
       ...(config.reasoningEffort && { reasoning: { effort: config.reasoningEffort } }),
@@ -156,9 +173,17 @@ export async function runAgent(
     // metadata wait doesn't inflate the reported elapsed time.
     const totals = await result.getUsage();
     const durationMs = Date.now() - startedAt;
+    // OpenRouter returns the selected provider synchronously in
+    // openrouter_metadata when X-OpenRouter-Metadata is enabled. Fall back to
+    // the async /generation endpoint for cases where metadata is missing.
+    const meta = response.openrouterMetadata;
+    const providerFromMeta =
+      meta?.endpoints?.available?.find((e) => e.selected)?.provider ??
+      meta?.attempts?.[0]?.provider ??
+      null;
     const gen = response.id ? await fetchGeneration(client, response.id) : null;
     const stats: RunStats = {
-      provider: gen?.providerName ?? null,
+      provider: providerFromMeta ?? gen?.providerName ?? null,
       tokensPerSec: gen?.generationTime && gen.nativeTokensCompletion
         ? Math.round((gen.nativeTokensCompletion / gen.generationTime) * 1000)
         : null,

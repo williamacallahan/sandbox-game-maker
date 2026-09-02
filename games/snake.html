@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+  }
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+  #overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-align: center;
+    pointer-events: none;
+  }
+  #overlay h1 {
+    font-size: clamp(2rem, 6vw, 4rem);
+    color: #4cff72;
+    text-shadow: 0 0 20px #4cff72;
+    letter-spacing: 4px;
+    margin-bottom: 0.4em;
+  }
+  #overlay p {
+    font-size: clamp(0.9rem, 2.5vw, 1.4rem);
+    color: #aaa;
+    margin: 0.2em 0;
+  }
+  #overlay #score-display {
+    font-size: clamp(1.2rem, 3.5vw, 2rem);
+    color: #fff;
+    margin-top: 0.6em;
+  }
+  #overlay #msg {
+    font-size: clamp(1rem, 3vw, 1.6rem);
+    color: #ff4c4c;
+    margin-top: 0.5em;
+    text-shadow: 0 0 10px #ff4c4c;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="overlay">
+  <h1>SNAKE</h1>
+  <p>Arrow Keys or WASD to move</p>
+  <p>Walls wrap around</p>
+  <div id="score-display"></div>
+  <div id="msg">Press any key to start</div>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const scoreDisplay = document.getElementById('score-display');
+const msg = document.getElementById('msg');
+
+const COLS = 25, ROWS = 25;
+let CELL, OX, OY;
+
+function resize() {
+  const size = Math.min(window.innerWidth, window.innerHeight);
+  canvas.width = canvas.height = size;
+  CELL = Math.floor(size / COLS);
+  OX = Math.floor((size - CELL * COLS) / 2);
+  OY = Math.floor((size - CELL * ROWS) / 2);
+}
+resize();
+window.addEventListener('resize', () => { resize(); draw(); });
+
+// Game state
+let snake, dir, nextDir, food, score, state, interval;
+// state: 'idle' | 'playing' | 'dead'
+
+function initGame() {
+  const cx = Math.floor(COLS / 2), cy = Math.floor(ROWS / 2);
+  snake = [
+    { x: cx,     y: cy },
+    { x: cx - 1, y: cy },
+    { x: cx - 2, y: cy },
+  ];
+  dir = { x: 1, y: 0 };
+  nextDir = { x: 1, y: 0 };
+  score = 0;
+  placeFood();
+}
+
+function placeFood() {
+  let pos;
+  do {
+    pos = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+  } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+  food = pos;
+}
+
+function step() {
+  dir = nextDir;
+  const head = {
+    x: (snake[0].x + dir.x + COLS) % COLS,
+    y: (snake[0].y + dir.y + ROWS) % ROWS,
+  };
+
+  // Self collision
+  if (snake.some(s => s.x === head.x && s.y === head.y)) {
+    endGame();
+    return;
+  }
+
+  snake.unshift(head);
+
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    placeFood();
+    // Speed up slightly every 5 points
+    if (score % 5 === 0) {
+      clearInterval(interval);
+      const speed = Math.max(60, 200 - score * 5);
+      interval = setInterval(step, speed);
+    }
+  } else {
+    snake.pop();
+  }
+
+  draw();
+}
+
+function endGame() {
+  state = 'dead';
+  clearInterval(interval);
+  overlay.style.display = 'flex';
+  overlay.querySelector('h1').textContent = 'GAME OVER';
+  overlay.querySelector('h1').style.color = '#ff4c4c';
+  overlay.querySelector('h1').style.textShadow = '0 0 20px #ff4c4c';
+  scoreDisplay.textContent = `Score: ${score}`;
+  msg.textContent = 'Press any key to restart';
+  draw();
+}
+
+function startGame() {
+  state = 'playing';
+  overlay.style.display = 'none';
+  initGame();
+  clearInterval(interval);
+  interval = setInterval(step, 150);
+  draw();
+}
+
+// --- Drawing ---
+function draw() {
+  const size = canvas.width;
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, size, size);
+
+  // Grid
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x <= COLS; x++) {
+    ctx.beginPath();
+    ctx.moveTo(OX + x * CELL, OY);
+    ctx.lineTo(OX + x * CELL, OY + ROWS * CELL);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= ROWS; y++) {
+    ctx.beginPath();
+    ctx.moveTo(OX, OY + y * CELL);
+    ctx.lineTo(OX + COLS * CELL, OY + y * CELL);
+    ctx.stroke();
+  }
+
+  // Food
+  if (food) {
+    const fx = OX + food.x * CELL, fy = OY + food.y * CELL;
+    const r = CELL / 2 - 2;
+    const cx = fx + CELL / 2, cy = fy + CELL / 2;
+    ctx.shadowColor = '#ff4c4c';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = '#ff4c4c';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // Snake
+  if (!snake) return;
+  for (let i = 0; i < snake.length; i++) {
+    const s = snake[i];
+    const sx = OX + s.x * CELL, sy = OY + s.y * CELL;
+    const pad = i === 0 ? 1 : 2;
+    const t = i / snake.length;
+    // Gradient from bright green head to darker tail
+    const green = Math.floor(255 - t * 140);
+    const blue  = Math.floor(50  + t * 30);
+    ctx.fillStyle = i === 0
+      ? '#ffffff'
+      : `rgb(${Math.floor(40 + t*20)}, ${green}, ${blue})`;
+
+    if (i === 0) {
+      ctx.shadowColor = '#4cff72';
+      ctx.shadowBlur = 16;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.beginPath();
+    const radius = Math.max(2, CELL / 2 - pad);
+    roundRect(ctx, sx + pad, sy + pad, CELL - pad * 2, CELL - pad * 2, radius);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  // Live score
+  if (state === 'playing') {
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = `bold ${Math.max(12, CELL * 0.7)}px Courier New`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`Score: ${score}`, OX + 6, OY + CELL * 0.8);
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  if (w < 2 * r) r = w / 2;
+  if (h < 2 * r) r = h / 2;
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// --- Input ---
+const DIRS = {
+  ArrowUp:    { x: 0, y: -1 }, w: { x: 0, y: -1 },
+  ArrowDown:  { x: 0, y:  1 }, s: { x: 0, y:  1 },
+  ArrowLeft:  { x: -1, y: 0 }, a: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y:  0 }, d: { x: 1, y:  0 },
+};
+
+document.addEventListener('keydown', e => {
+  if (state !== 'playing') {
+    startGame();
+    return;
+  }
+  const d = DIRS[e.key] || DIRS[e.key.toLowerCase()];
+  if (d) {
+    // Prevent 180° reversal
+    if (d.x !== -dir.x || d.y !== -dir.y) {
+      nextDir = d;
+    }
+    e.preventDefault();
+  }
+});
+
+// Touch support
+let touchStart = null;
+canvas.addEventListener('touchstart', e => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  if (state !== 'playing') startGame();
+}, { passive: true });
+canvas.addEventListener('touchend', e => {
+  if (!touchStart || state !== 'playing') return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+  let d;
+  if (Math.abs(dx) > Math.abs(dy)) d = dx > 0 ? DIRS.ArrowRight : DIRS.ArrowLeft;
+  else d = dy > 0 ? DIRS.ArrowDown : DIRS.ArrowUp;
+  if (d.x !== -dir.x || d.y !== -dir.y) nextDir = d;
+  touchStart = null;
+}, { passive: true });
+
+// Init
+state = 'idle';
+initGame();
+draw();
+</script>
+</body>
+</html>

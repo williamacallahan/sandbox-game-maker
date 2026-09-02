@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cat</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: sans-serif;
+    user-select: none;
+  }
+
+  #scene {
+    position: relative;
+    width: 420px;
+    height: 420px;
+  }
+
+  /* ── CAT ── */
+  #cat {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 160px;
+    height: 200px;
+    cursor: pointer;
+    transition: bottom 0.1s;
+  }
+
+  /* body */
+  .body {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 120px;
+    background: #e8c97e;
+    border-radius: 55px 55px 40px 40px;
+  }
+
+  /* belly */
+  .belly {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 70px;
+    background: #f5e4b0;
+    border-radius: 50%;
+  }
+
+  /* tail */
+  .tail {
+    position: absolute;
+    bottom: 10px;
+    right: -30px;
+    width: 80px;
+    height: 20px;
+    border-bottom: 14px solid #e8c97e;
+    border-right: 14px solid transparent;
+    border-radius: 0 0 60px 0;
+    transform-origin: left center;
+    animation: wag 2s ease-in-out infinite;
+  }
+  @keyframes wag {
+    0%,100% { transform: rotate(-10deg); }
+    50%      { transform: rotate(20deg); }
+  }
+
+  /* head */
+  .head {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 90px;
+    background: #e8c97e;
+    border-radius: 50% 50% 45% 45%;
+  }
+
+  /* ears */
+  .ear {
+    position: absolute;
+    top: -22px;
+    width: 0;
+    height: 0;
+  }
+  .ear-left {
+    left: 8px;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-bottom: 30px solid #e8c97e;
+  }
+  .ear-right {
+    right: 8px;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-bottom: 30px solid #e8c97e;
+  }
+  .ear-inner {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-bottom: 18px solid #f5a0a0;
+  }
+
+  /* face */
+  .face {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+  }
+
+  /* eyes */
+  .eye {
+    position: absolute;
+    top: 32px;
+    width: 18px;
+    height: 18px;
+    background: #2ecc71;
+    border-radius: 50%;
+    overflow: hidden;
+    transition: height 0.15s;
+  }
+  .eye-left  { left: 18px; }
+  .eye-right { right: 18px; }
+  .pupil {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 14px;
+    background: #111;
+    border-radius: 50%;
+    transition: width 0.2s, height 0.2s;
+  }
+  .eye-shine {
+    position: absolute;
+    top: 3px; left: 10px;
+    width: 5px; height: 5px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 50%;
+  }
+
+  /* blink */
+  .blink .eye { height: 3px !important; }
+
+  /* nose */
+  .nose {
+    position: absolute;
+    top: 54px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0; height: 0;
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 9px solid #f07;
+  }
+
+  /* mouth */
+  .mouth {
+    position: absolute;
+    top: 62px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 12px;
+    border-bottom: 3px solid #c05;
+    border-left: 3px solid #c05;
+    border-right: 3px solid #c05;
+    border-radius: 0 0 14px 14px;
+    border-top: none;
+    background: transparent;
+  }
+
+  /* whiskers */
+  .whiskers {
+    position: absolute;
+    top: 52px;
+    left: 0; right: 0;
+  }
+  .wh {
+    position: absolute;
+    height: 2px;
+    background: #bbb;
+    border-radius: 1px;
+    transform-origin: right center;
+  }
+  .wh-l1 { width: 28px; left: -10px; top: 0;  transform: rotate(-15deg); }
+  .wh-l2 { width: 30px; left: -12px; top: 8px; transform: rotate(0deg); }
+  .wh-l3 { width: 26px; left: -8px;  top: 16px;transform: rotate(15deg); }
+  .wh-r1 { width: 28px; right: -10px; top: 0;  transform: rotate(15deg); transform-origin: left center; }
+  .wh-r2 { width: 30px; right: -12px; top: 8px; transform: rotate(0deg); transform-origin: left center; }
+  .wh-r3 { width: 26px; right: -8px;  top: 16px;transform: rotate(-15deg); transform-origin: left center; }
+
+  /* paws */
+  .paws {
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+  }
+  .paw {
+    width: 30px;
+    height: 18px;
+    background: #e8c97e;
+    border-radius: 50%;
+  }
+
+  /* ── GROUND ── */
+  #ground {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 60px;
+    background: linear-gradient(180deg, #2d6a2d, #1a3d1a);
+    border-radius: 0 0 12px 12px;
+  }
+
+  /* ── STARS ── */
+  #stars {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 55%;
+    pointer-events: none;
+  }
+
+  /* ── MOON ── */
+  #moon {
+    position: absolute;
+    top: 18px; right: 30px;
+    width: 46px; height: 46px;
+    background: #fffde0;
+    border-radius: 50%;
+    box-shadow: 0 0 18px 6px rgba(255,253,180,0.5);
+  }
+
+  /* ── SPEECH ── */
+  #speech {
+    position: absolute;
+    top: -52px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    color: #333;
+    padding: 6px 14px;
+    border-radius: 14px;
+    font-size: 18px;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+  #speech::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid white;
+  }
+
+  /* ── HEARTS ── */
+  .heart {
+    position: absolute;
+    font-size: 22px;
+    pointer-events: none;
+    animation: float-up 1.4s ease-out forwards;
+  }
+  @keyframes float-up {
+    0%   { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-90px) scale(1.5); }
+  }
+
+  /* ── INFO ── */
+  #hint {
+    margin-top: 14px;
+    color: rgba(255,255,255,0.45);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── PURR ── */
+  #purr-bar {
+    margin-top: 10px;
+    width: 200px;
+    height: 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  #purr-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #f5a0a0, #f07090);
+    border-radius: 4px;
+    transition: width 0.3s;
+  }
+</style>
+</head>
+<body>
+
+<div id="scene">
+  <!-- stars -->
+  <svg id="stars" viewBox="0 0 420 230"></svg>
+
+  <!-- moon -->
+  <div id="moon"></div>
+
+  <!-- cat -->
+  <div id="cat">
+    <div id="speech">Meow! 😸</div>
+
+    <!-- body -->
+    <div class="body">
+      <div class="belly"></div>
+      <div class="tail"></div>
+      <div class="paws"><div class="paw"></div><div class="paw"></div></div>
+    </div>
+
+    <!-- head -->
+    <div class="head">
+      <div class="ear ear-left"><div class="ear-inner"></div></div>
+      <div class="ear ear-right"><div class="ear-inner"></div></div>
+      <div class="face">
+        <div class="eye eye-left"><div class="pupil"></div><div class="eye-shine"></div></div>
+        <div class="eye eye-right"><div class="pupil"></div><div class="eye-shine"></div></div>
+        <div class="nose"></div>
+        <div class="mouth"></div>
+        <div class="whiskers">
+          <div class="wh wh-l1"></div>
+          <div class="wh wh-l2"></div>
+          <div class="wh wh-l3"></div>
+          <div class="wh wh-r1"></div>
+          <div class="wh wh-r2"></div>
+          <div class="wh wh-r3"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ground"></div>
+</div>
+
+<div id="purr-bar"><div id="purr-fill"></div></div>
+<div id="hint">click the cat to pet it 🐾</div>
+
+<script>
+  // ── Stars ──
+  const svg = document.getElementById('stars');
+  for (let i = 0; i < 55; i++) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    const x = Math.random() * 420;
+    const y = Math.random() * 230;
+    const r = Math.random() * 1.8 + 0.4;
+    c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r);
+    c.setAttribute('fill', `rgba(255,255,220,${Math.random()*0.7+0.3})`);
+    c.style.animation = `blink-star ${(Math.random()*3+1.5).toFixed(1)}s ${(Math.random()*3).toFixed(1)}s ease-in-out infinite alternate`;
+    svg.appendChild(c);
+  }
+  const style = document.createElement('style');
+  style.textContent = `@keyframes blink-star { from{opacity:0.2} to{opacity:1} }`;
+  document.head.appendChild(style);
+
+  // ── State ──
+  const cat    = document.getElementById('cat');
+  const speech = document.getElementById('speech');
+  const fill   = document.getElementById('purr-fill');
+  const face   = cat.querySelector('.face');
+
+  let happiness = 0;   // 0–100
+  let blinkTimer, speechTimer;
+
+  const meows = ['Meow! 😸','Purrr~ 💛','*headbutts you*','Mrrrow!','Nyaa~ ♪','Pet me more!','*kneads*','Miau! 🐾'];
+
+  function setHappiness(v) {
+    happiness = Math.min(100, Math.max(0, v));
+    fill.style.width = happiness + '%';
+    // pupils dilate with happiness
+    document.querySelectorAll('.pupil').forEach(p => {
+      const w = 8 + happiness * 0.08;
+      const h = 14 - happiness * 0.06;
+      p.style.width  = w + 'px';
+      p.style.height = Math.max(6, h) + 'px';
+    });
+  }
+
+  // ── Blink ──
+  function scheduleBlink() {
+    clearTimeout(blinkTimer);
+    blinkTimer = setTimeout(() => {
+      face.classList.add('blink');
+      setTimeout(() => { face.classList.remove('blink'); scheduleBlink(); }, 180);
+    }, 2000 + Math.random() * 3000);
+  }
+  scheduleBlink();
+
+  // ── Idle happiness drain ──
+  setInterval(() => setHappiness(happiness - 0.4), 500);
+
+  // ── Click / pet ──
+  cat.addEventListener('click', (e) => {
+    setHappiness(happiness + 12);
+
+    // bounce
+    cat.style.bottom = '80px';
+    setTimeout(() => cat.style.bottom = '60px', 120);
+
+    // speech
+    const msg = meows[Math.floor(Math.random() * meows.length)];
+    speech.textContent = msg;
+    speech.style.opacity = '1';
+    clearTimeout(speechTimer);
+    speechTimer = setTimeout(() => speech.style.opacity = '0', 1800);
+
+    // hearts
+    for (let i = 0; i < 3; i++) {
+      const h = document.createElement('div');
+      h.className = 'heart';
+      h.textContent = ['❤️','🧡','💛','💚','💜'][Math.floor(Math.random()*5)];
+      h.style.left = (50 + (Math.random()-0.5)*80) + 'px';
+      h.style.top  = (10 + Math.random()*40) + 'px';
+      h.style.animationDelay = (i * 0.18) + 's';
+      cat.appendChild(h);
+      setTimeout(() => h.remove(), 1600);
+    }
+
+    // reset blink schedule
+    scheduleBlink();
+  });
+
+  // ── Eyes follow cursor ──
+  document.addEventListener('mousemove', (e) => {
+    const rect = cat.getBoundingClientRect();
+    const cx = rect.left + rect.width  / 2;
+    const cy = rect.top  + rect.height / 2;
+    const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
+    const dist  = Math.min(3, Math.hypot(e.clientX - cx, e.clientY - cy) / 40);
+    const dx = Math.cos(angle) * dist;
+    const dy = Math.sin(angle) * dist;
+    document.querySelectorAll('.pupil').forEach(p => {
+      p.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    });
+  });
+
+  // init
+  setHappiness(30);
+</script>
+</body>
+</html>

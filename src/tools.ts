@@ -98,13 +98,19 @@ function validateHtmlGame(path: string, content: string, issues: string[]) {
   if (/@import\s+(?:url\s*)?\(\s*["']?https?:/i.test(content) || /@import\s+["']https?:/i.test(content)) {
     issues.push('CSS @import from a remote URL: inline all styles.');
   }
+  if (/(?:^|[^\w.])localStorage\s*[.(]/i.test(content)) {
+    issues.push('HTML uses localStorage: the gallery iframe is sandboxed without allow-same-origin, so storage APIs throw.');
+  }
+  if (/(?:^|[^\w.])sessionStorage\s*[.(]/i.test(content)) {
+    issues.push('HTML uses sessionStorage: the gallery iframe is sandboxed without allow-same-origin, so storage APIs throw.');
+  }
 
   // Fill the square viewport.
-  const bodyTag = content.match(/<body([^>]*)>/i);
-  const bodyRule = content.match(/body\s*\{([^}]*)\}/is);
+  const bodyTag = /<body([^>]*)>/i.exec(content);
+  const bodyRule = /body\s*\{([^}]*)\}/is.exec(content);
   const bodyStyle = (bodyTag?.[1] ?? '') + ' ' + (bodyRule?.[1] ?? '');
   const hasOverflowHidden = /overflow\s*:\s*hidden/i.test(bodyStyle);
-  const globalRule = content.match(/\*\s*\{([^}]*)\}/is);
+  const globalRule = /\*\s*\{([^}]*)\}/is.exec(content);
   const hasMargin0 =
     /margin\s*:\s*0\b/i.test(bodyStyle) ||
     /margin\s*:\s*0\s+0/i.test(bodyStyle) ||

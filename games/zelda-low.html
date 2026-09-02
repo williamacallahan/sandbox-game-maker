@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zelda Low</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { margin: 0; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; }
+canvas { display: block; image-rendering: pixelated; }
+#ui { position: absolute; top: 10px; left: 10px; color: #fff; font-family: monospace; font-size: 14px; pointer-events: none; }
+#overlay { data-game-overlay; position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,0.85); z-index: 10; }
+#overlay h1 { color: #7fff7f; font-family: monospace; font-size: 36px; margin-bottom: 10px; }
+#overlay p { color: #ccc; font-family: monospace; font-size: 16px; margin: 4px 0; }
+#overlay .start { color: #fff; font-size: 20px; margin-top: 20px; animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui"></div>
+<div id="overlay">
+<h1>⚔ ZELDA LOW ⚔</h1>
+<p>WASD / Arrows — Move</p>
+<p>SPACE / Z — Attack</p>
+<p>Slay enemies, survive the dungeon</p>
+<p class="start">Press any key to start</p>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const ui = document.getElementById('ui');
+const overlay = document.getElementById('overlay');
+
+let W, H, TILE, COLS, ROWS;
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  const size = Math.min(W, H);
+  canvas.width = size;
+  canvas.height = size;
+  canvas.style.width = size + 'px';
+  canvas.style.height = size + 'px';
+  TILE = Math.floor(size / 20);
+  COLS = Math.floor(size / TILE);
+  ROWS = Math.floor(size / TILE);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Game state
+let started = false;
+let gameover = false;
+let score = 0;
+let level = 1;
+let spawnTimer = 0;
+let maxEnemies = 3;
+
+// Map
+let map = [];
+let player = { x: 0, y: 0, hp: 5, maxHp: 5, dir: 0, attacking: 0, attackDir: 0, inv: 0 };
+let enemies = [];
+let particles = [];
+
+function genMap() {
+  map = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+  // Border walls
+  for (let y = 0; y < ROWS; y++) { map[0][y] = 1; map[ROWS-1][y] = 1; }
+  for (let x = 0; x < COLS; x++) { map[x][0] = 1; map[x][ROWS-1] = 1; }
+  // Random wall clusters
+  let clusters = 8 + level * 2;
+  for (let i = 0; i < clusters; i++) {
+    let cx = 2 + Math.floor(Math.random() * (COLS - 4));
+    let cy = 2 + Math.floor(Math.random() * (ROWS - 4));
+    let w = 2 + Math.floor(Math.random() * 3);
+    let h = 2 + Math.floor(Math.random() * 3);
+    for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < h; dy++) {
+      if (cx+dx < COLS-1 && cy+dy < ROWS-1) map[cx+dx][cy+dy] = 1;
+    }
+  }
+  // Clear center area for spawn
+  let mx = Math.floor(COLS/2), my = Math.floor(ROWS/2);
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+    let tx = mx+dx, ty = my+dy;
+    if (tx > 0 && tx < COLS-1 && ty > 0 && ty < ROWS-1) map[tx][ty] = 0;
+  }
+  // Clear some corridors
+  for (let i = 0; i < 12; i++) {
+    let x = Math.floor(Math.random() * (COLS-2)) + 1;
+    let y = Math.floor(Math.random() * (ROWS-2)) + 1;
+    map[x][y] = 0;
+    if (x+1 < COLS-1) map[x+1][y] = 0;
+    if (y+1 < ROWS-1) map[x][y+1] = 0;
+  }
+  player.x = mx * TILE;
+  player.y = my * TILE;
+}
+
+function isWall(px, py) {
+  let tx = Math.floor(px / TILE);
+  let ty = Math.floor(py / TILE);
+  if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return true;
+  return map[tx][ty] === 1;
+}
+
+function canMove(px, py) {
+  let r = 5;
+  return !isWall(px - r, py - r) && !isWall(px + r, py - r) &&
+         !isWall(px - r, py + r) && !isWall(px + r, py + r);
+}
+
+function spawnEnemy() {
+  if (enemies.length >= maxEnemies) return;
+  for (let tries = 0; tries < 50; tries++) {
+    let x = (1 + Math.floor(Math.random() * (COLS-2))) * TILE;
+    let y = (1 + Math.floor(Math.random() * (ROWS-2))) * TILE;
+    let dx = x - player.x, dy = y - player.y;
+    if (Math.sqrt(dx*dx+dy*dy) > TILE * 5 && canMove(x, y)) {
+      enemies.push({ x, y, hp: 2 + Math.floor(level/2), speed: 1.2 + level * 0.15, type: Math.random() < 0.3 ? 'fast' : 'normal', hit: 0 });
+      return;
+    }
+  }
+}
+
+function startGame() {
+  started = true;
+  gameover = false;
+  score = 0;
+  level = 1;
+  player = { x: 0, y: 0, hp: 5, maxHp: 5, dir: 0, attacking: 0, attackDir: 0, inv: 0 };
+  enemies = [];
+  particles = [];
+  maxEnemies = 3;
+  genMap();
+  overlay.style.display = 'none';
+}
+
+// Input
+let keys = {};
+window.addEventListener('keydown', e => {
+  if (!started) { startGame(); return; }
+  keys[e.key.toLowerCase()] = true;
+  if ((e.key === ' ' || e.key.toLowerCase() === 'z') && player.attacking === 0) {
+    player.attacking = 12;
+    let dx = 0, dy = 0;
+    if (keys['w'] || keys['arrowup']) dy = -1;
+    if (keys['s'] || keys['arrowdown']) dy = 1;
+    if (keys['a'] || keys['arrowleft']) dx = -1;
+    if (keys['d'] || keys['arrowright']) dx = 1;
+    if (dx === 0 && dy === 0) { dy = -1; }
+    player.attackDir = Math.atan2(dy, dx);
+  }
+  e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+canvas.addEventListener('click', () => { if (!started) startGame(); });
+canvas.addEventListener('touchstart', e => { if (!started) { startGame(); e.preventDefault(); } });
+
+// Dismiss overlay via message
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'game-maker:dismiss-overlay') {
+    overlay.style.display = 'none';
+  }
+});
+
+function addParticle(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 1 + Math.random() * 3;
+    particles.push({ x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, life: 20 + Math.random()*15, color });
+  }
+}
+
+function update() {
+  if (!started || gameover) return;
+
+  // Player movement
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup']) dy = -1;
+  if (keys['s'] || keys['arrowdown']) dy = 1;
+  if (keys['a'] || keys['arrowleft']) dx = -1;
+  if (keys['d'] || keys['arrowright']) dx = 1;
+  if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
+  let speed = 2.5;
+  let nx = player.x + dx * speed;
+  let ny = player.y + dy * speed;
+  if (canMove(nx, player.y)) player.x = nx;
+  if (canMove(player.x, ny)) player.y = ny;
+  if (dx !== 0 || dy !== 0) player.dir = Math.atan2(dy, dx);
+
+  // Attack timer
+  if (player.attacking > 0) player.attacking--;
+  if (player.inv > 0) player.inv--;
+
+  // Attack hitbox
+  if (player.attacking === 10) {
+    let ax = player.x + Math.cos(player.attackDir) * TILE * 0.7;
+    let ay = player.y + Math.sin(player.attackDir) * TILE * 0.7;
+    for (let e of enemies) {
+      let edx = e.x - ax, edy = e.y - ay;
+      if (Math.sqrt(edx*edx+edy*edy) < TILE * 0.8) {
+        e.hp--;
+        e.hit = 10;
+        let pushAngle = Math.atan2(e.y - player.y, e.x - player.x);
+        e.x += Math.cos(pushAngle) * 8;
+        e.y += Math.sin(pushAngle) * 8;
+        addParticle(e.x, e.y, '#ff6644', 6);
+      }
+    }
+  }
+
+  // Enemies
+  spawnTimer++;
+  if (spawnTimer > 90 - level * 5) {
+    spawnTimer = 0;
+    spawnEnemy();
+  }
+
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    let e = enemies[i];
+    if (e.hp <= 0) {
+      addParticle(e.x, e.y, e.type === 'fast' ? '#ff44ff' : '#ff6644', 10);
+      enemies.splice(i, 1);
+      score++;
+      if (score % 5 === 0) {
+        level++;
+        maxEnemies = 3 + level;
+        player.hp = Math.min(player.maxHp, player.hp + 1);
+        genMap();
+      }
+      continue;
+    }
+    if (e.hit > 0) { e.hit--; continue; }
+
+    // Chase player
+    let angle = Math.atan2(player.y - e.y, player.x - e.x);
+    let es = e.type === 'fast' ? e.speed * 1.4 : e.speed;
+    let ex = e.x + Math.cos(angle) * es;
+    let ey = e.y + Math.sin(angle) * es;
+    if (canMove(ex, e.y)) e.x = ex;
+    if (canMove(e.x, ey)) e.y = ey;
+
+    // Hit player
+    if (player.inv === 0) {
+      let pdx = player.x - e.x, pdy = player.y - e.y;
+      if (Math.sqrt(pdx*pdx+pdy*pdy) < TILE * 0.5) {
+        player.hp--;
+        player.inv = 45;
+        addParticle(player.x, player.y, '#ff0000', 5);
+        if (player.hp <= 0) {
+          gameover = true;
+        }
+      }
+    }
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    let p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.92;
+    p.vy *= 0.92;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!started) return;
+
+  // Draw map
+  let camX = player.x - canvas.width / 2;
+  let camY = player.y - canvas.height / 2;
+  camX = Math.max(0, Math.min(camX, COLS * TILE - canvas.width));
+  camY = Math.max(0, Math.min(camY, ROWS * TILE - canvas.height));
+
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      let sx = x * TILE - camX;
+      let sy = y * TILE - camY;
+      if (sx < -TILE || sx > canvas.width || sy < -TILE || sy > canvas.height) continue;
+      if (map[x][y] === 1) {
+        ctx.fillStyle = '#4a3728';
+        ctx.fillRect(sx, sy, TILE, TILE);
+        ctx.fillStyle = '#5c4a3a';
+        ctx.fillRect(sx + 2, sy + 2, TILE - 4, TILE - 4);
+      } else {
+        ctx.fillStyle = '#2d2d3f';
+        ctx.fillRect(sx, sy, TILE, TILE);
+        ctx.fillStyle = '#333348';
+        ctx.fillRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
+      }
+    }
+  }
+
+  // Draw enemies
+  for (let e of enemies) {
+    let sx = e.x - camX;
+    let sy = e.y - camY;
+    if (e.hit > 0 && e.hit % 4 < 2) continue;
+    let r = TILE * 0.35;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fillStyle = e.type === 'fast' ? '#cc44cc' : '#cc4444';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    let eyeOff = Math.atan2(player.y - e.y, player.x - e.x);
+    ctx.beginPath();
+    ctx.arc(sx + Math.cos(eyeOff)*3 - 3, sy + Math.sin(eyeOff)*3 - 2, 2.5, 0, Math.PI*2);
+    ctx.arc(sx + Math.cos(eyeOff)*3 + 3, sy + Math.sin(eyeOff)*3 - 2, 2.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.arc(sx + Math.cos(eyeOff)*3 - 3, sy + Math.sin(eyeOff)*3 - 2, 1.2, 0, Math.PI*2);
+    ctx.arc(sx + Math.cos(eyeOff)*3 + 3, sy + Math.sin(eyeOff)*3 - 2, 1.2, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Draw player
+  let px = player.x - camX;
+  let py = player.y - camY;
+  if (player.inv > 0 && player.inv % 6 < 3) {
+    ctx.globalAlpha = 0.4;
+  }
+  // Body
+  ctx.fillStyle = '#44cc44';
+  ctx.beginPath();
+  ctx.arc(px, py, TILE * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+  // Hat
+  ctx.fillStyle = '#33aa33';
+  ctx.beginPath();
+  ctx.arc(px, py - 3, TILE * 0.25, Math.PI, 0);
+  ctx.fill();
+  // Eyes
+  ctx.fillStyle = '#fff';
+  let lookX = Math.cos(player.dir) * 2;
+  let lookY = Math.sin(player.dir) * 2;
+  ctx.beginPath();
+  ctx.arc(px - 3 + lookX, py - 2 + lookY, 2.5, 0, Math.PI*2);
+  ctx.arc(px + 3 + lookX, py - 2 + lookY, 2.5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(px - 3 + lookX, py - 2 + lookY, 1.2, 0, Math.PI*2);
+  ctx.arc(px + 3 + lookX, py - 2 + lookY, 1.2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Attack slash
+  if (player.attacking > 0) {
+    let progress = 1 - player.attacking / 12;
+    let slashAngle = player.attackDir + (progress - 0.5) * 1.5;
+    let slashR = TILE * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.arc(px, py, slashR, slashAngle - 0.5, slashAngle + 0.5);
+    ctx.closePath();
+    ctx.fillStyle = `rgba(200, 230, 255, ${0.7 * (1 - progress * 0.5)})`;
+    ctx.fill();
+  }
+
+  // Particles
+  for (let p of particles) {
+    let sx = p.x - camX;
+    let sy = p.y - camY;
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = p.life / 35;
+    ctx.fillRect(sx - 2, sy - 2, 4, 4);
+  }
+  ctx.globalAlpha = 1;
+
+  // UI
+  ui.innerHTML = '';
+  // Hearts
+  let hearts = '';
+  for (let i = 0; i < player.maxHp; i++) {
+    hearts += i < player.hp ? '❤️' : '🖤';
+  }
+  ui.innerHTML = `<div>${hearts}</div><div>Score: ${score}</div><div>Level: ${level}</div>`;
+
+  // Game over
+  if (gameover) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ff4444';
+    ctx.font = 'bold 32px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 20);
+    ctx.fillStyle = '#fff';
+    ctx.font = '18px monospace';
+    ctx.fillText(`Score: ${score}  Level: ${level}`, canvas.width/2, canvas.height/2 + 20);
+    ctx.fillText('Press any key to restart', canvas.width/2, canvas.height/2 + 55);
+    ctx.textAlign = 'left';
+    if (Object.keys(keys).length > 0) {
+      startGame();
+    }
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

@@ -92,7 +92,12 @@ addEventListener('error', (event) => {
   event.preventDefault();
 });
 </script>
-<script src="__GAME_URL__"></script>
-<script>term.focus();</script>
+<script type="module" src="__GAME_URL__" crossorigin="anonymous"></script>
+<script>
+const gameScript = document.currentScript.previousElementSibling;
+gameScript.addEventListener('load', () => { document.body.dataset.gameStatus = 'running'; });
+gameScript.addEventListener('error', () => { document.body.dataset.gameStatus = 'failed'; });
+term.focus();
+</script>
 </body>
 </html>

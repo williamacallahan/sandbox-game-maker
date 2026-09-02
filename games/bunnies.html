@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Bunny Pop!</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+body {
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Comic Sans MS', 'Chalkboard SE', cursive, sans-serif;
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 25%, #a1c4fd 50%, #c2e9fb 75%, #fbc2eb 100%);
+  background-size: 400% 400%;
+  animation: bgShift 8s ease infinite;
+  touch-action: manipulation;
+}
+@keyframes bgShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+#hud {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  z-index: 100;
+}
+#score {
+  font-size: clamp(20px, 5vw, 36px);
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 3px 3px 0 #ff6b6b, -1px -1px 0 #ff6b6b;
+  transition: transform 0.1s;
+}
+#score.pop { transform: scale(1.3); }
+#timer {
+  font-size: clamp(20px, 5vw, 36px);
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 3px 3px 0 #4ecdc4, -1px -1px 0 #4ecdc4;
+}
+#combo {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(16px, 4vw, 28px);
+  color: #ffd700;
+  text-shadow: 2px 2px 0 #e67e22;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#combo.show { opacity: 1; }
+
+#game-area {
+  position: relative;
+  width: 90vmin;
+  height: 70vmin;
+  max-width: 600px;
+  max-height: 500px;
+}
+
+#grid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 2%;
+  padding: 2%;
+}
+
+.hole {
+  position: relative;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, #2d5016 0%, #4a7c2e 60%, #6b9b3e 100%);
+  box-shadow: inset 0 4px 12px rgba(0,0,0,0.5), 0 4px 8px rgba(0,0,0,0.2);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: visible;
+  cursor: pointer;
+}
+
+.bunny-wrap {
+  position: absolute;
+  bottom: 30%;
+  width: 80%;
+  aspect-ratio: 1;
+  transform: translateY(100%) scale(0);
+  transition: none;
+  z-index: 10;
+  cursor: pointer;
+}
+.bunny-wrap.visible {
+  animation: popUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.bunny-wrap.hiding {
+  animation: popDown 0.2s ease-in forwards;
+}
+@keyframes popUp {
+  0% { transform: translateY(100%) scale(0); }
+  100% { transform: translateY(0) scale(1); }
+}
+@keyframes popDown {
+  0% { transform: translateY(0) scale(1); }
+  100% { transform: translateY(100%) scale(0); }
+}
+
+.bunny {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  border-radius: 45% 45% 50% 50%;
+  transition: filter 0.1s;
+}
+.bunny-wrap:hover .bunny { filter: brightness(1.15); }
+
+.bunny-ears {
+  position: absolute;
+  top: -35%;
+  left: 15%;
+  width: 70%;
+  height: 45%;
+}
+.ear {
+  position: absolute;
+  bottom: 0;
+  width: 30%;
+  height: 100%;
+  border-radius: 50% 50% 0 0;
+  transform-origin: bottom center;
+}
+.ear-left { left: 15%; transform: rotate(-10deg); }
+.ear-right { right: 15%; transform: rotate(10deg); }
+.ear-inner {
+  position: absolute;
+  top: 15%;
+  left: 25%;
+  width: 50%;
+  height: 70%;
+  border-radius: 50% 50% 0 0;
+  opacity: 0.7;
+}
+
+.bunny-face {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 40%;
+}
+.eye {
+  position: absolute;
+  top: 20%;
+  width: 18%;
+  aspect-ratio: 1;
+  background: #2d2d2d;
+  border-radius: 50%;
+}
+.eye::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  left: 20%;
+  width: 40%;
+  height: 40%;
+  background: #fff;
+  border-radius: 50%;
+}
+.eye-left { left: 10%; }
+.eye-right { right: 10%; }
+.nose {
+  position: absolute;
+  bottom: 25%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 15%;
+  height: 12%;
+  background: #ff6b9d;
+  border-radius: 50%;
+}
+.mouth {
+  position: absolute;
+  bottom: 5%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30%;
+  height: 20%;
+  border-bottom: 3px solid #2d2d2d;
+  border-radius: 0 0 50% 50%;
+}
+.cheek {
+  position: absolute;
+  top: 50%;
+  width: 12%;
+  aspect-ratio: 1;
+  background: rgba(255,150,150,0.5);
+  border-radius: 50%;
+}
+.cheek-left { left: 2%; }
+.cheek-right { right: 2%; }
+
+/* Fox (bad guy) */
+.fox { background: #e74c3c !important; }
+.fox .ear { background: #c0392b; }
+.fox .ear-inner { background: #e67e22; }
+.fox .nose { background: #2d2d2d; width: 12%; }
+.fox .mouth { border-bottom-color: #2d2d2d; }
+.fox .eye { background: #f39c12; }
+.fox .eye::after { width: 30%; height: 30%; top: 25%; left: 30%; }
+
+/* Score particles */
+.particle {
+  position: absolute;
+  pointer-events: none;
+  font-size: clamp(12px, 3vw, 20px);
+  font-weight: bold;
+  z-index: 200;
+  animation: particleFloat 0.8s ease-out forwards;
+}
+@keyframes particleFloat {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(1.5); }
+}
+
+.star-particle {
+  position: absolute;
+  pointer-events: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  z-index: 200;
+  animation: starBurst 0.6s ease-out forwards;
+}
+@keyframes starBurst {
+  0% { opacity: 1; transform: translate(0,0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0); }
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.6);
+  z-index: 500;
+  border-radius: 12px;
+}
+#overlay h1 {
+  font-size: clamp(28px, 8vw, 56px);
+  color: #fff;
+  text-shadow: 4px 4px 0 #ff6b6b;
+  margin-bottom: 20px;
+}
+#overlay .sub {
+  font-size: clamp(14px, 3.5vw, 22px);
+  color: #ffd700;
+  margin-bottom: 30px;
+  text-align: center;
+  padding: 0 20px;
+}
+#overlay button {
+  font-family: inherit;
+  font-size: clamp(18px, 4vw, 28px);
+  padding: 14px 40px;
+  border: none;
+  border-radius: 50px;
+  background: linear-gradient(135deg, #ff6b6b, #ffa500);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(255,107,107,0.5);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+#overlay button:hover {
+  transform: scale(1.08);
+  box-shadow: 0 8px 30px rgba(255,107,107,0.7);
+}
+#overlay button:active { transform: scale(0.95); }
+#final-score {
+  font-size: clamp(20px, 5vw, 32px);
+  color: #4ecdc4;
+  margin-bottom: 10px;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+}
+#best-score {
+  font-size: clamp(14px, 3vw, 18px);
+  color: #ffd700;
+  margin-bottom: 25px;
+}
+
+#screen-shake {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+}
+.shake {
+  animation: shake 0.3s ease;
+}
+@keyframes shake {
+  0%, 100% { transform: translate(0,0); }
+  25% { transform: translate(-8px, 4px); }
+  50% { transform: translate(6px, -4px); }
+  75% { transform: translate(-4px, 2px); }
+}
+
+/* Floating decorations */
+.deco {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.3;
+  font-size: clamp(20px, 4vw, 40px);
+  animation: floatDeco 4s ease-in-out infinite;
+}
+@keyframes floatDeco {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-15px) rotate(5deg); }
+}
+</style>
+</head>
+<body>
+<div id="screen-shake"></div>
+<div id="hud">
+  <div id="score">0</div>
+  <div id="combo"></div>
+  <div id="timer">30</div>
+</div>
+<div id="game-area">
+  <div id="grid"></div>
+</div>
+
+<div id="overlay" data-game-overlay>
+  <h1>🐰 Bunny Pop! 🐰</h1>
+  <div class="sub">Tap bunnies before they hide!<br>🦊 = Don't tap the fox! (-3 pts)<br>🐰 White=1 | 🩷 Pink=2 | 💜 Purple=3 | ✨ Gold=5</div>
+  <div id="final-score"></div>
+  <div id="best-score"></div>
+  <button id="start-btn">PLAY!</button>
+</div>
+
+<script>
+const GRID_SIZE = 9;
+const GAME_DURATION = 30;
+const BUNNY_TYPES = [
+  { color: '#fff', inner: '#ffc0cb', pts: 1, weight: 40 },
+  { color: '#ffb6c1', inner: '#ff69b4', pts: 2, weight: 30 },
+  { color: '#dda0dd', inner: '#9370db', pts: 3, weight: 20 },
+  { color: '#ffd700', inner: '#ff8c00', pts: 5, weight: 5 },
+  { color: '#e74c3c', inner: '#e67e22', pts: -3, weight: 10, isFox: true },
+];
+
+let score = 0;
+let timeLeft = GAME_DURATION;
+let playing = false;
+let combo = 0;
+let maxCombo = 0;
+let bestScore = 0;
+try { bestScore = parseInt(localStorage.getItem('bunnyPopBest') || '0', 10); } catch {}
+let spawnInterval = null;
+let timerInterval = null;
+let spawnTimer = null;
+let holes = [];
+let activeBunnies = {};
+
+const grid = document.getElementById('grid');
+const scoreEl = document.getElementById('score');
+const timerEl = document.getElementById('timer');
+const comboEl = document.getElementById('combo');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const finalScoreEl = document.getElementById('final-score');
+const bestScoreEl = document.getElementById('best-score');
+const shakeEl = document.getElementById('screen-shake');
+
+// Add floating decorations
+function addDecos() {
+  const decos = ['🥕', '🌸', '⭐', '🌼', '🍀'];
+  for (let i = 0; i < 6; i++) {
+    const d = document.createElement('div');
+    d.className = 'deco';
+    d.textContent = decos[i % decos.length];
+    d.style.left = (Math.random() * 90 + 5) + '%';
+    d.style.top = (Math.random() * 90 + 5) + '%';
+    d.style.animationDelay = (Math.random() * 4) + 's';
+    d.style.animationDuration = (3 + Math.random() * 3) + 's';
+    document.body.appendChild(d);
+  }
+}
+addDecos();
+
+function buildGrid() {
+  grid.innerHTML = '';
+  holes = [];
+  for (let i = 0; i < GRID_SIZE; i++) {
+    const hole = document.createElement('div');
+    hole.className = 'hole';
+    hole.dataset.index = i;
+    grid.appendChild(hole);
+    holes.push(hole);
+  }
+}
+buildGrid();
+
+function pickBunnyType() {
+  const total = BUNNY_TYPES.reduce((s, t) => s + t.weight, 0);
+  let r = Math.random() * total;
+  for (const type of BUNNY_TYPES) {
+    r -= type.weight;
+    if (r <= 0) return type;
+  }
+  return BUNNY_TYPES[0];
+}
+
+function createBunnyHTML(type) {
+  const cls = type.isFox ? ' fox' : '';
+  return `<div class="bunny${cls}" style="background:${type.color}">
+    <div class="bunny-ears">
+      <div class="ear ear-left" style="background:${type.color}">
+        <div class="ear-inner" style="background:${type.inner}"></div>
+      </div>
+      <div class="ear ear-right" style="background:${type.color}">
+        <div class="ear-inner" style="background:${type.inner}"></div>
+      </div>
+    </div>
+    <div class="bunny-face">
+      <div class="eye eye-left"></div>
+      <div class="eye eye-right"></div>
+      <div class="nose"></div>
+      <div class="mouth"></div>
+      <div class="cheek cheek-left"></div>
+      <div class="cheek cheek-right"></div>
+    </div>
+  </div>`;
+}
+
+function spawnBunny() {
+  if (!playing) return;
+
+  // Pick an empty hole
+  const emptyHoles = holes.filter((_, i) => !activeBunnies[i]);
+  if (emptyHoles.length === 0) return;
+
+  const hole = emptyHoles[Math.floor(Math.random() * emptyHoles.length)];
+  const idx = parseInt(hole.dataset.index);
+  const type = pickBunnyType();
+
+  const wrap = document.createElement('div');
+  wrap.className = 'bunny-wrap';
+  wrap.innerHTML = createBunnyHTML(type);
+  wrap.dataset.type = BUNNY_TYPES.indexOf(type);
+
+  hole.appendChild(wrap);
+  requestAnimationFrame(() => {
+    wrap.classList.add('visible');
+  });
+
+  const lifeTime = Math.max(600, 1400 - (GAME_DURATION - timeLeft) * 25);
+
+  const hideTimeout = setTimeout(() => {
+    if (activeBunnies[idx]) {
+      hideBunny(idx);
+      // Missed penalty for combo
+      if (!type.isFox) {
+        combo = 0;
+        updateCombo();
+      }
+    }
+  }, lifeTime);
+
+  activeBunnies[idx] = { wrap, type, hideTimeout };
+
+  wrap.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    hitBunny(idx, e);
+  });
+
+  // Schedule next spawn
+  const nextDelay = Math.max(300, 900 - (GAME_DURATION - timeLeft) * 20);
+  spawnTimer = setTimeout(spawnBunny, nextDelay);
+}
+
+function hideBunny(idx) {
+  const data = activeBunnies[idx];
+  if (!data) return;
+  clearTimeout(data.hideTimeout);
+  data.wrap.classList.remove('visible');
+  data.wrap.classList.add('hiding');
+  setTimeout(() => {
+    if (data.wrap.parentNode) data.wrap.remove();
+  }, 200);
+  delete activeBunnies[idx];
+}
+
+function hitBunny(idx, e) {
+  const data = activeBunnies[idx];
+  if (!data) return;
+
+  const type = data.type;
+  score += type.pts;
+  if (score < 0) score = 0;
+
+  if (type.isFox) {
+    combo = 0;
+    shakeEl.classList.add('shake');
+    setTimeout(() => shakeEl.classList.remove('shake'), 300);
+    showParticle(idx, '-3', '#ff4444');
+  } else {
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+    const bonus = combo >= 5 ? 2 : combo >= 3 ? 1 : 0;
+    score += bonus;
+    const label = bonus > 0 ? `+${type.pts + bonus} 🔥` : `+${type.pts}`;
+    showParticle(idx, label, type.color === '#fff' ? '#4ecdc4' : type.color);
+    spawnStars(idx, type.color);
+  }
+
+  updateScore();
+  updateCombo();
+  hideBunny(idx);
+
+  // Quick double spawn reward
+  if (combo >= 5 && Math.random() > 0.5) {
+    setTimeout(spawnBunny, 100);
+  }
+}
+
+function showParticle(holeIdx, text, color) {
+  const rect = holes[holeIdx].getBoundingClientRect();
+  const p = document.createElement('div');
+  p.className = 'particle';
+  p.textContent = text;
+  p.style.color = color;
+  p.style.left = (rect.left + rect.width / 2 - 20) + 'px';
+  p.style.top = (rect.top + 10) + 'px';
+  p.style.textShadow = `2px 2px 0 ${color}44`;
+  document.body.appendChild(p);
+  setTimeout(() => p.remove(), 800);
+}
+
+function spawnStars(holeIdx, color) {
+  const rect = holes[holeIdx].getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  for (let i = 0; i < 6; i++) {
+    const star = document.createElement('div');
+    star.className = 'star-particle';
+    star.style.background = color;
+    star.style.left = cx + 'px';
+    star.style.top = cy + 'px';
+    const angle = (i / 6) * Math.PI * 2;
+    const dist = 30 + Math.random() * 40;
+    star.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    star.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+    document.body.appendChild(star);
+    setTimeout(() => star.remove(), 600);
+  }
+}
+
+function updateScore() {
+  scoreEl.textContent = score;
+  scoreEl.classList.add('pop');
+  setTimeout(() => scoreEl.classList.remove('pop'), 100);
+}
+
+function updateCombo() {
+  if (combo >= 3) {
+    comboEl.textContent = `🔥 ${combo}x COMBO!`;
+    comboEl.classList.add('show');
+  } else {
+    comboEl.classList.remove('show');
+  }
+}
+
+function startGame() {
+  // Clean up
+  clearAllBunnies();
+  score = 0;
+  timeLeft = GAME_DURATION;
+  combo = 0;
+  maxCombo = 0;
+  playing = true;
+
+  scoreEl.textContent = '0';
+  timerEl.textContent = timeLeft;
+  comboEl.classList.remove('show');
+  overlay.style.display = 'none';
+
+  // Timer
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    timerEl.textContent = timeLeft;
+    if (timeLeft <= 5) {
+      timerEl.style.color = '#ff4444';
+      timerEl.style.textShadow = '3px 3px 0 #ff0000';
+    }
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+
+  // Spawn loop
+  spawnBunny();
+}
+
+function endGame() {
+  playing = false;
+  clearInterval(timerInterval);
+  clearTimeout(spawnTimer);
+  clearAllBunnies();
+
+  timerEl.style.color = '#fff';
+  timerEl.style.textShadow = '3px 3px 0 #4ecdc4';
+
+  if (score > bestScore) {
+    bestScore = score;
+    try { localStorage.setItem('bunnyPopBest', bestScore); } catch {}
+  }
+
+  finalScoreEl.textContent = `Score: ${score} | Best Combo: ${maxCombo}x`;
+  bestScoreEl.textContent = `🏆 Best: ${bestScore}`;
+  startBtn.textContent = 'PLAY AGAIN!';
+
+  setTimeout(() => {
+    overlay.style.display = 'flex';
+  }, 500);
+}
+
+function clearAllBunnies() {
+  Object.keys(activeBunnies).forEach(idx => {
+    const data = activeBunnies[idx];
+    clearTimeout(data.hideTimeout);
+    data.wrap.remove();
+    delete activeBunnies[idx];
+  });
+  clearTimeout(spawnTimer);
+}
+
+// Start / restart button (click works for pointer, keyboard, and touch)
+startBtn.addEventListener('click', (e) => {
+  e.preventDefault();
+  startGame();
+});
+
+// Dismiss overlay via message — start the game if it's still at the title screen
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'game-maker:dismiss-overlay') {
+    if (overlay.style.display !== 'none') startGame();
+  }
+});
+
+// Prevent context menu
+document.addEventListener('contextmenu', e => e.preventDefault());
+</script>
+</body>
+</html>

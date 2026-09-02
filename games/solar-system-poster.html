@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Solar System</title>
+<style>
+  @import url('data:text/css,');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    color: #fff;
+    font-family: Georgia, 'Times New Roman', serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .poster {
+    width: 900px;
+    background: radial-gradient(ellipse at 50% 10%, #0d1b3e 0%, #050a1a 60%, #000 100%);
+    border: 2px solid #c8a84b;
+    padding: 40px 40px 50px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Star field */
+  .stars {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  /* Title */
+  .title-block {
+    text-align: center;
+    margin-bottom: 30px;
+    position: relative;
+    z-index: 2;
+  }
+  .title-block h1 {
+    font-size: 52px;
+    letter-spacing: 14px;
+    text-transform: uppercase;
+    color: #f0d080;
+    text-shadow: 0 0 30px #c8a84b88, 0 0 60px #c8a84b44;
+    font-weight: normal;
+  }
+  .title-block .subtitle {
+    font-size: 13px;
+    letter-spacing: 6px;
+    color: #8ab4d8;
+    margin-top: 6px;
+    text-transform: uppercase;
+  }
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #c8a84b, transparent);
+    margin: 20px 0;
+  }
+
+  /* Solar system SVG scene */
+  .scene-wrap {
+    display: flex;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    margin-bottom: 12px;
+  }
+
+  /* Planet grid */
+  .planets-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-top: 28px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .planet-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(200,168,75,0.25);
+    border-radius: 8px;
+    padding: 16px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .planet-card:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(200,168,75,0.55);
+  }
+
+  .planet-name {
+    font-size: 15px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #f0d080;
+    font-weight: bold;
+  }
+  .planet-type {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #6a9cc8;
+  }
+  .planet-fact {
+    font-size: 11.5px;
+    color: #c0d0e0;
+    text-align: center;
+    line-height: 1.6;
+    font-style: italic;
+  }
+  .planet-stat {
+    font-size: 10.5px;
+    color: #8ab4d8;
+    text-align: center;
+    line-height: 1.7;
+  }
+  .planet-stat span {
+    color: #e8c860;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 32px;
+    font-size: 10.5px;
+    letter-spacing: 3px;
+    color: #4a6a88;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 2;
+  }
+
+  .fun-facts {
+    display: flex;
+    gap: 16px;
+    margin-top: 28px;
+    position: relative;
+    z-index: 2;
+  }
+  .fact-box {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(138,180,216,0.2);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .fact-box h3 {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #8ab4d8;
+    margin-bottom: 7px;
+  }
+  .fact-box p {
+    font-size: 11.5px;
+    color: #c0cfe0;
+    line-height: 1.65;
+  }
+</style>
+</head>
+<body>
+<div class="poster">
+
+  <!-- SVG star field -->
+  <svg class="stars" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="sg" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#fff" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <script>
+    // stars drawn via JS inside SVG
+    </script>
+  </svg>
+
+  <div class="title-block">
+    <div class="subtitle">A guide to our celestial neighbourhood</div>
+    <div style="height:10px"></div>
+    <h1>The Solar System</h1>
+    <div class="divider"></div>
+    <div class="subtitle">One Star &nbsp;·&nbsp; Eight Planets &nbsp;·&nbsp; Countless Wonders</div>
+  </div>
+
+  <!-- Main SVG scene -->
+  <div class="scene-wrap">
+    <svg width="820" height="200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 200">
+      <defs>
+        <!-- Sun glow -->
+        <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#fff7a0"/>
+          <stop offset="35%" stop-color="#ffcc00"/>
+          <stop offset="70%" stop-color="#ff7700"/>
+          <stop offset="100%" stop-color="#ff440000"/>
+        </radialGradient>
+        <radialGradient id="sunCore" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#fffde0"/>
+          <stop offset="40%" stop-color="#ffdd44"/>
+          <stop offset="100%" stop-color="#ff8800"/>
+        </radialGradient>
+        <!-- Mercury -->
+        <radialGradient id="mercGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#e0d0c0"/>
+          <stop offset="100%" stop-color="#6a5a50"/>
+        </radialGradient>
+        <!-- Venus -->
+        <radialGradient id="venGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#fffad0"/>
+          <stop offset="100%" stop-color="#c8a040"/>
+        </radialGradient>
+        <!-- Earth -->
+        <radialGradient id="earthGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#a0d8ef"/>
+          <stop offset="50%" stop-color="#2277cc"/>
+          <stop offset="100%" stop-color="#0a3a6a"/>
+        </radialGradient>
+        <!-- Mars -->
+        <radialGradient id="marsGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#ffb080"/>
+          <stop offset="100%" stop-color="#8a2000"/>
+        </radialGradient>
+        <!-- Jupiter -->
+        <radialGradient id="jupGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#f0d8b0"/>
+          <stop offset="100%" stop-color="#c8903a"/>
+        </radialGradient>
+        <!-- Saturn -->
+        <radialGradient id="satGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#fff0c0"/>
+          <stop offset="100%" stop-color="#b89040"/>
+        </radialGradient>
+        <!-- Uranus -->
+        <radialGradient id="uraGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#d0f8f8"/>
+          <stop offset="100%" stop-color="#3ab8c8"/>
+        </radialGradient>
+        <!-- Neptune -->
+        <radialGradient id="nepGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#a0b8ff"/>
+          <stop offset="100%" stop-color="#1a20a8"/>
+        </radialGradient>
+        <!-- orbit line -->
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="sunGlow">
+          <feGaussianBlur stdDeviation="10" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="ringGlow">
+          <feGaussianBlur stdDeviation="1.5" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- Orbit lines -->
+      <line x1="68" y1="100" x2="820" y2="100" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+
+      <!-- Sun -->
+      <circle cx="30" cy="100" r="55" fill="url(#sunGrad)" filter="url(#sunGlow)"/>
+      <circle cx="30" cy="100" r="34" fill="url(#sunCore)"/>
+
+      <!-- Labels below planets -->
+      <!-- Mercury -->
+      <circle cx="125" cy="100" r="7" fill="url(#mercGrad)" filter="url(#glow)"/>
+      <text x="125" y="120" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">MERCURY</text>
+
+      <!-- Venus -->
+      <circle cx="190" cy="100" r="11" fill="url(#venGrad)" filter="url(#glow)"/>
+      <text x="190" y="124" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">VENUS</text>
+
+      <!-- Earth -->
+      <circle cx="265" cy="100" r="12" fill="url(#earthGrad)" filter="url(#glow)"/>
+      <!-- Earth continent blobs -->
+      <ellipse cx="261" cy="96" rx="4" ry="3" fill="#3a8a30" opacity="0.7"/>
+      <ellipse cx="270" cy="104" rx="3" ry="2" fill="#3a8a30" opacity="0.6"/>
+      <text x="265" y="125" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">EARTH</text>
+
+      <!-- Mars -->
+      <circle cx="335" cy="100" r="9" fill="url(#marsGrad)" filter="url(#glow)"/>
+      <text x="335" y="121" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">MARS</text>
+
+      <!-- Asteroid belt hint -->
+      <line x1="358" y1="80" x2="358" y2="120" stroke="rgba(180,160,120,0.2)" stroke-width="1" stroke-dasharray="2,3"/>
+      <line x1="370" y1="75" x2="370" y2="125" stroke="rgba(180,160,120,0.15)" stroke-width="1" stroke-dasharray="2,4"/>
+      <line x1="380" y1="82" x2="380" y2="118" stroke="rgba(180,160,120,0.15)" stroke-width="1" stroke-dasharray="1,3"/>
+      <text x="369" y="145" text-anchor="middle" font-family="Georgia" font-size="7.5" fill="#6a5a40" letter-spacing="0.5">ASTEROID BELT</text>
+
+      <!-- Jupiter -->
+      <circle cx="460" cy="100" r="30" fill="url(#jupGrad)" filter="url(#glow)"/>
+      <!-- Jupiter bands -->
+      <ellipse cx="460" cy="94" rx="30" ry="4" fill="rgba(160,100,50,0.35)"/>
+      <ellipse cx="460" cy="102" rx="30" ry="5" fill="rgba(200,140,80,0.3)"/>
+      <ellipse cx="460" cy="110" rx="30" ry="3.5" fill="rgba(160,100,50,0.3)"/>
+      <!-- Great Red Spot -->
+      <ellipse cx="472" cy="104" rx="5" ry="3.5" fill="rgba(180,60,40,0.7)"/>
+      <text x="460" y="144" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">JUPITER</text>
+
+      <!-- Saturn -->
+      <g>
+        <!-- Ring back -->
+        <ellipse cx="567" cy="100" rx="35" ry="8" fill="none" stroke="#c8a840" stroke-width="5" opacity="0.35" filter="url(#ringGlow)"/>
+        <ellipse cx="567" cy="100" rx="35" ry="8" fill="none" stroke="#e8d080" stroke-width="2" opacity="0.5"/>
+        <!-- Planet -->
+        <circle cx="567" cy="100" r="22" fill="url(#satGrad)" filter="url(#glow)"/>
+        <!-- bands -->
+        <ellipse cx="567" cy="95" rx="22" ry="3" fill="rgba(180,140,60,0.3)"/>
+        <ellipse cx="567" cy="103" rx="22" ry="3" fill="rgba(180,140,60,0.25)"/>
+        <!-- Ring front overlap -->
+        <ellipse cx="567" cy="100" rx="35" ry="8" fill="none" stroke="#c8a840" stroke-width="5" opacity="0.2" clip-path="url(#frontRing)"/>
+      </g>
+      <text x="567" y="136" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">SATURN</text>
+
+      <!-- Uranus -->
+      <circle cx="654" cy="100" r="16" fill="url(#uraGrad)" filter="url(#glow)"/>
+      <!-- Uranus ring (tilted) -->
+      <ellipse cx="654" cy="100" rx="7" ry="20" fill="none" stroke="rgba(160,230,240,0.4)" stroke-width="2"/>
+      <text x="654" y="130" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">URANUS</text>
+
+      <!-- Neptune -->
+      <circle cx="730" cy="100" r="15" fill="url(#nepGrad)" filter="url(#glow)"/>
+      <!-- storm spot -->
+      <ellipse cx="725" cy="97" rx="4" ry="2.5" fill="rgba(80,100,220,0.5)"/>
+      <text x="730" y="128" text-anchor="middle" font-family="Georgia" font-size="8.5" fill="#aaa" letter-spacing="1">NEPTUNE</text>
+
+      <!-- Sun label -->
+      <text x="30" y="162" text-anchor="middle" font-family="Georgia" font-size="9.5" fill="#f0d080" letter-spacing="1">THE SUN</text>
+    </svg>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Planet cards -->
+  <div class="planets-grid">
+
+    <!-- Mercury -->
+    <div class="planet-card">
+      <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #e0d0c0, #6a5a50);box-shadow:0 0 10px #6a5a5066"></div>
+      <div class="planet-name">Mercury</div>
+      <div class="planet-type">Terrestrial</div>
+      <div class="planet-fact">"The Swift Planet"</div>
+      <div class="planet-stat">
+        Diameter: <span>4,879 km</span><br>
+        Distance: <span>57.9M km</span><br>
+        Year: <span>88 Earth days</span><br>
+        Moons: <span>0</span>
+      </div>
+    </div>
+
+    <!-- Venus -->
+    <div class="planet-card">
+      <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #fffad0, #c8a040);box-shadow:0 0 12px #c8a04066"></div>
+      <div class="planet-name">Venus</div>
+      <div class="planet-type">Terrestrial</div>
+      <div class="planet-fact">"The Morning Star"</div>
+      <div class="planet-stat">
+        Diameter: <span>12,104 km</span><br>
+        Distance: <span>108.2M km</span><br>
+        Year: <span>225 Earth days</span><br>
+        Moons: <span>0</span>
+      </div>
+    </div>
+
+    <!-- Earth -->
+    <div class="planet-card">
+      <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #a0d8ef, #2277cc, #0a3a6a);box-shadow:0 0 12px #2277cc66"></div>
+      <div class="planet-name">Earth</div>
+      <div class="planet-type">Terrestrial</div>
+      <div class="planet-fact">"Our Blue Marble"</div>
+      <div class="planet-stat">
+        Diameter: <span>12,742 km</span><br>
+        Distance: <span>149.6M km</span><br>
+        Year: <span>365.25 days</span><br>
+        Moons: <span>1</span>
+      </div>
+    </div>
+
+    <!-- Mars -->
+    <div class="planet-card">
+      <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #ffb080, #8a2000);box-shadow:0 0 12px #8a200066"></div>
+      <div class="planet-name">Mars</div>
+      <div class="planet-type">Terrestrial</div>
+      <div class="planet-fact">"The Red Planet"</div>
+      <div class="planet-stat">
+        Diameter: <span>6,779 km</span><br>
+        Distance: <span>227.9M km</span><br>
+        Year: <span>687 Earth days</span><br>
+        Moons: <span>2</span>
+      </div>
+    </div>
+
+    <!-- Jupiter -->
+    <div class="planet-card">
+      <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #f0d8b0, #c8903a);box-shadow:0 0 14px #c8903a88"></div>
+      <div class="planet-name">Jupiter</div>
+      <div class="planet-type">Gas Giant</div>
+      <div class="planet-fact">"The King of Planets"</div>
+      <div class="planet-stat">
+        Diameter: <span>139,820 km</span><br>
+        Distance: <span>778.5M km</span><br>
+        Year: <span>11.9 Earth years</span><br>
+        Moons: <span>95</span>
+      </div>
+    </div>
+
+    <!-- Saturn -->
+    <div class="planet-card">
+      <div style="width:40px;height:36px;position:relative;display:flex;align-items:center;justify-content:center">
+        <div style="width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #fff0c0, #b89040);box-shadow:0 0 14px #b8904088;position:relative;z-index:2"></div>
+        <div style="position:absolute;width:46px;height:10px;border-radius:50%;border:3px solid rgba(200,168,64,0.5);top:50%;transform:translateY(-50%);z-index:1"></div>
+      </div>
+      <div class="planet-name">Saturn</div>
+      <div class="planet-type">Gas Giant</div>
+      <div class="planet-fact">"Lord of the Rings"</div>
+      <div class="planet-stat">
+        Diameter: <span>116,460 km</span><br>
+        Distance: <span>1.43B km</span><br>
+        Year: <span>29.5 Earth years</span><br>
+        Moons: <span>146</span>
+      </div>
+    </div>
+
+    <!-- Uranus -->
+    <div class="planet-card">
+      <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #d0f8f8, #3ab8c8);box-shadow:0 0 12px #3ab8c888"></div>
+      <div class="planet-name">Uranus</div>
+      <div class="planet-type">Ice Giant</div>
+      <div class="planet-fact">"The Tilted Planet"</div>
+      <div class="planet-stat">
+        Diameter: <span>50,724 km</span><br>
+        Distance: <span>2.87B km</span><br>
+        Year: <span>84 Earth years</span><br>
+        Moons: <span>28</span>
+      </div>
+    </div>
+
+    <!-- Neptune -->
+    <div class="planet-card">
+      <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 38% 35%, #a0b8ff, #1a20a8);box-shadow:0 0 12px #1a20a888"></div>
+      <div class="planet-name">Neptune</div>
+      <div class="planet-type">Ice Giant</div>
+      <div class="planet-fact">"The Windy Planet"</div>
+      <div class="planet-stat">
+        Diameter: <span>49,244 km</span><br>
+        Distance: <span>4.50B km</span><br>
+        Year: <span>165 Earth years</span><br>
+        Moons: <span>16</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Fun facts strip -->
+  <div class="fun-facts">
+    <div class="fact-box">
+      <h3>☀ The Sun</h3>
+      <p>The Sun contains <strong style="color:#f0d080">99.86%</strong> of all mass in the solar system. Its core reaches <strong style="color:#f0d080">15 million °C</strong> — hot enough to fuse hydrogen into helium.</p>
+    </div>
+    <div class="fact-box">
+      <h3>🪐 Gas Giants</h3>
+      <p>Jupiter's Great Red Spot is a storm larger than <strong style="color:#f0d080">two Earths</strong> that has raged for over <strong style="color:#f0d080">350 years</strong>. Saturn's rings are made mostly of ice and rock.</p>
+    </div>
+    <div class="fact-box">
+      <h3>🌍 Habitable Zone</h3>
+      <p>Earth sits in the "Goldilocks Zone" — just the right distance from the Sun for liquid water to exist, making it the only known planet to harbour <strong style="color:#f0d080">life</strong>.</p>
+    </div>
+    <div class="fact-box">
+      <h3>🌌 Scale</h3>
+      <p>If the Sun were the size of a basketball, Earth would be a <strong style="color:#f0d080">grape seed</strong> 26 metres away, and Neptune would be a pea over <strong style="color:#f0d080">750 metres</strong> away.</p>
+    </div>
+  </div>
+
+  <div class="divider" style="margin-top:30px"></div>
+
+  <div class="footer">
+    Age of the Solar System: ~4.6 Billion Years &nbsp;·&nbsp; Distance to nearest star: 4.24 light-years &nbsp;·&nbsp; Solar System diameter: ~9.09 Trillion km
+  </div>
+
+</div>
+
+<script>
+  // Inject SVG stars into the star layer
+  const svgEl = document.querySelector('.stars');
+  const ns = 'http://www.w3.org/2000/svg';
+  const W = 900, H = 1200;
+  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svgEl.setAttribute('xmlns', ns);
+
+  const rng = (min, max) => min + Math.random() * (max - min);
+
+  for (let i = 0; i < 280; i++) {
+    const c = document.createElementNS(ns, 'circle');
+    const r = rng(0.4, 1.6);
+    const opacity = rng(0.2, 0.9);
+    c.setAttribute('cx', rng(0, W));
+    c.setAttribute('cy', rng(0, H));
+    c.setAttribute('r', r);
+    c.setAttribute('fill', '#ffffff');
+    c.setAttribute('opacity', opacity);
+    svgEl.appendChild(c);
+  }
+  // A few coloured stars
+  const colours = ['#ffd0a0','#a0d0ff','#ffeedd'];
+  for (let i = 0; i < 30; i++) {
+    const c = document.createElementNS(ns, 'circle');
+    c.setAttribute('cx', rng(0, W));
+    c.setAttribute('cy', rng(0, H));
+    c.setAttribute('r', rng(0.8, 2));
+    c.setAttribute('fill', colours[Math.floor(Math.random()*colours.length)]);
+    c.setAttribute('opacity', rng(0.3, 0.7));
+    svgEl.appendChild(c);
+  }
+</script>
+</body>
+</html>
