@@ -1,8 +1,8 @@
 # Game Maker
 
-Generate one-shot playable games and small creative works with OpenRouter.
+Generate one-shot, self-contained HTML games and creative works from the Web UI using OpenRouter.
 
-## Quick start
+## Web UI quick start
 
 ### 1. Install
 
@@ -18,7 +18,7 @@ Requires [Bun](https://bun.sh) and an OpenRouter API key.
 export OPENROUTER_API_KEY="sk-or-..."
 ```
 
-Or create `agent.config.json` in the repo root with defaults:
+You can also drop defaults into `agent.config.json` in the repo root:
 
 ```json
 {
@@ -31,9 +31,9 @@ Or create `agent.config.json` in the repo root with defaults:
 }
 ```
 
-Supported environment variables: `OPENROUTER_API_KEY`, `AGENT_MODEL`, `AGENT_MAX_TOOL_CALLS`, `AGENT_MAX_CONTEXT_TOKENS`, `AGENT_MAX_OUTPUT_TOKENS`, `AGENT_MAX_REASONING_TOKENS`, `AGENT_MAX_COST`.
+Other env overrides: `AGENT_MODEL`, `AGENT_MAX_TOOL_CALLS`, `AGENT_MAX_CONTEXT_TOKENS`, `AGENT_MAX_OUTPUT_TOKENS`, `AGENT_MAX_REASONING_TOKENS`, `AGENT_MAX_COST`.
 
-### 3. Run the local UI on port 3000
+### 3. Start the dev server on port 3000
 
 ```bash
 bun run ui
@@ -41,58 +41,64 @@ bun run ui
 
 Open <http://localhost:3000>.
 
-The web UI lets you edit the **user prompt**, **system prompt**, model, reasoning effort, and budget caps before generating. Generated files are saved to `games/` and added to `games/feed.json`.
+### 4. Generate an HTML game
 
-If you use Doppler, the same server is also available as `bun run ui:openrouter`.
+1. Enter your **Prompt** — e.g. *"a neon snake game with wrap-around walls"*.
+2. (Optional) Expand **Settings** to change:
+   - **Model** (default `qwen/qwen3.8-flash`)
+   - **System Prompt** (default game rules in `src/config.ts`)
+   - **Reasoning Effort** (`low`, `medium`, `high`)
+   - **Max Tool Calls**, **Context Tokens**, **Output Tokens**, **Max Cost**
+3. Click **Make Game**.
 
-### 4. CLI
+The agent streams the generation, calls `save_game` and `validate_game`, and writes a single self-contained `.html` file to `games/` and an entry to `games/feed.json`. Open the saved game in the feed to play it.
 
-Generate from the command line:
+### 5. What gets generated
 
-```bash
-bun run start -- "a neon snake game"
-```
+- One `.html` file with inline CSS and vanilla JS.
+- No network requests, no frameworks, no CDN imports.
+- A `1:1` square viewport.
+- Any start overlay is dismissible and responds to `click`.
 
-Watch mode (restarts on source changes):
+### 6. Edit system prompts and params
 
-```bash
-bun run dev -- "a pong game"
-```
+- **Default game system prompt + hard-coded defaults** — `src/config.ts` (`DEFAULTS`)
+- **Create-mode system prompt** — `src/config.ts` (`CREATE_SYSTEM_PROMPT`)
+- **Per-run overrides** — the UI fields, `agent.config.json`, or env vars
 
-Stream NDJSON events:
-
-```bash
-bun run start -- --json "a breakout clone" | jq .
-```
-
-Create mode for any creative work (games, posters, charts, etc.):
-
-```bash
-bun run start -- --create "a poster about the solar system"
-```
-
-CLI flags: `-m, --model`, `-s, --system`, `-r, --reasoning`, `-o, --out`, `--max-tool-calls`, `--max-context-tokens`, `--max-output-tokens`, `--max-reasoning-tokens`, `--max-cost`, `-j, --json`, `-q, --quiet`.
-
-### 5. Edit system prompts and params
-
-- **Default game system prompt and built-in defaults**: `src/config.ts` (`DEFAULTS`)
-- **Create-mode system prompt**: `src/config.ts` (`CREATE_SYSTEM_PROMPT`)
-- **Per-run overrides**: `agent.config.json`, CLI flags, or the UI fields
-- **Runtime model / caps**: env vars listed above
-
-### 6. Build and test
+### 7. Build and test
 
 ```bash
 bun run build
 bun test
 ```
 
+## Extra: Bun CLI
+
+You can also drive generation from the terminal. This is the same engine with different front-ends.
+
+```bash
+# Generate a game
+bun run start -- "a neon snake game"
+
+# Watch mode
+bun run dev -- "a pong game"
+
+# NDJSON event stream
+bun run start -- --json "a breakout clone" | jq .
+
+# Create any creative work (poster, chart, toy, etc.)
+bun run start -- --create "a poster about the solar system"
+```
+
+CLI flags: `-m, --model`, `-s, --system`, `-r, --reasoning`, `-o, --out`, `--max-tool-calls`, `--max-context-tokens`, `--max-output-tokens`, `--max-reasoning-tokens`, `--max-cost`, `-j, --json`, `-q, --quiet`.
+
 ## Project layout
 
-- `src/agent.ts` — model calling, streaming, and token/cost metadata
-- `src/cli.ts` — command-line runner
+- `src/index.html` — Web UI
 - `src/server.ts` — Bun dev server on port 3000
+- `src/agent.ts` — model calling, streaming, and token/cost metadata
 - `src/tools.ts` — `save_game` / `validate_game` / `read_file` tools
 - `src/config.ts` — prompts, defaults, and `loadConfig`
-- `src/index.html` — web UI
+- `src/cli.ts` — command-line runner
 - `games/` — generated output (`*.html`, `*.js`, `feed.json`)
