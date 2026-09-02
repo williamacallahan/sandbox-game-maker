@@ -23,6 +23,7 @@ export function reasoningEffort(name: string, raw: string): ReasoningEffort {
 
 export interface AgentConfig {
   apiKey: string;
+  baseUrl?: string;
   model: string;
   systemPrompt: string;
   /** Hard cap on total tool calls across the whole run. */
@@ -44,6 +45,16 @@ export interface AgentConfig {
 /** Shared by both prompts: describes the one Budget mechanism in tools.ts. */
 const BUDGET_RULE = '- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.';
 
+/** Safety, rendering, and interaction rules shared by game and create-mode prompts. */
+const SHARED_GAME_RULES = [
+  '- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.',
+  '- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.',
+  '- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/window.innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.',
+  '- Interactive works must start unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: "game-maker:dismiss-overlay" }`.',
+  '- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.',
+  '- Vanilla JavaScript only.',
+];
+
 /**
  * Create Mode: the request is the subject of a creative work to build, not
  * only a game. Routes between an interactive file and a static page; both
@@ -60,12 +71,8 @@ export const CREATE_SYSTEM_PROMPT = [
   '  - Anything else — a poster, a chart, a dashboard, a reference card, a page to read — is a static .html file.',
   '- When a request could be either, build the interactive one. It is the better medium for anything that moves.',
   '- One self-contained file that runs with zero build steps. Inline every style and script. Make no external requests of any kind: no CDN, no web fonts, no images by URL, no npm installs. The file runs with no network, so anything fetched is simply missing.',
-  '- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.',
-  '- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.',
-  '- HTML files render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.',
-  '- Interactive works must start unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: "game-maker:dismiss-overlay" }`.',
-  '- Buttons and controls must respond to the `click` event, not only `pointerdown`, so keyboard and touch accessibility work.',
-  '- Vanilla JavaScript only. Draw images with CSS, SVG, or canvas, or embed them as data URIs.',
+  ...SHARED_GAME_RULES,
+  '- Draw images with CSS, SVG, or canvas, or embed them as data URIs.',
   '- Save the finished work with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field.',
   '- After saving, call validate_game on the saved path. If the work is interactive, do not finish until validate_game returns valid: true. If it is a static page, a missing input handler is expected; fix all other issues (external resources, non-dismissible overlay, viewport).',
   BUDGET_RULE,
@@ -73,7 +80,7 @@ export const CREATE_SYSTEM_PROMPT = [
   '- A small complete work beats a large broken one.',
 ].join('\n');
 
-const DEFAULTS: AgentConfig = {
+export const DEFAULTS: AgentConfig = {
   apiKey: '',
   model: 'qwen/qwen3.8-flash',
   systemPrompt: [
@@ -81,12 +88,8 @@ const DEFAULTS: AgentConfig = {
     '',
     'Rules:',
     '- Produce ONE self-contained file that runs with zero build steps: an .html file with inline CSS and vanilla JS (preferred, open in any browser)',
-    '- Vanilla JavaScript only. No frameworks, no npm installs, no CDN imports.',
-    '- Do not use localStorage, sessionStorage, or other origin-scoped storage APIs. The gallery iframe is sandboxed without allow-same-origin, so these APIs throw SecurityError and the game will not run.',
-    '- Do not use innerHTML, outerHTML, eval, new Function, document.write, or string-argument setTimeout/setInterval. Use textContent or create DOM nodes instead.',
-    '- HTML games render inside a square (1:1) viewport. Fill it exactly: `body { margin: 0; overflow: hidden }`, size everything from the live viewport (100vw/100vh, or a canvas resized to window.innerWidth/innerHeight on load and resize). No scrollbars, no fixed page dimensions, no letterboxing.',
-    '- Start gameplay unobstructed. Do not leave titles, prompts, or instructions over the play area. Any optional in-game overlay must be dismissible by keyboard, pointer, and touch, use `data-game-overlay`, and hide when a `message` event receives `{ type: "game-maker:dismiss-overlay" }`.',
-    "- Buttons and controls must respond to the 'click' event, not only 'pointerdown', so keyboard and touch accessibility work.",
+    '- No frameworks, npm installs, or CDN imports.',
+    ...SHARED_GAME_RULES,
     '- Save the finished game with the save_game tool using a short kebab-case filename and concise controls/objective in its instructions field. Independent tool calls (e.g. list_dir while drafting, or saving two variants) should be issued in parallel in one step if possible.',
     '- After saving, call validate_game on the saved path. Do not declare the game complete until validate_game returns valid: true. If it reports issues, use read_file to inspect the relevant section, fix the code, save again with save_game, and run validate_game again.',
     '- Before saving, self-check: the first interaction (click/tap/key) starts gameplay, the game makes no network requests, and any overlay is dismissible.',
@@ -111,6 +114,8 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}, opts?: { skipAp
   }
 
   if (process.env.OPENROUTER_API_KEY) config.apiKey = process.env.OPENROUTER_API_KEY;
+  if (process.env.LLM_API_KEY) config.apiKey = process.env.LLM_API_KEY;
+  if (process.env.LLM_BASE_URL) config.baseUrl = process.env.LLM_BASE_URL;
   if (process.env.AGENT_MODEL) config.model = process.env.AGENT_MODEL;
   if (process.env.AGENT_MAX_TOOL_CALLS) config.maxToolCalls = positiveNumber('AGENT_MAX_TOOL_CALLS', process.env.AGENT_MAX_TOOL_CALLS);
   if (process.env.AGENT_MAX_CONTEXT_TOKENS) config.maxContextTokens = positiveNumber('AGENT_MAX_CONTEXT_TOKENS', process.env.AGENT_MAX_CONTEXT_TOKENS);
@@ -122,6 +127,6 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}, opts?: { skipAp
   if (config.reasoningEffort && config.maxReasoningTokens) {
     throw new Error('Set either reasoningEffort or maxReasoningTokens, not both (OpenRouter accepts one).');
   }
-  if (!config.apiKey && !opts?.skipApiKey) throw new Error('OPENROUTER_API_KEY is required.');
+  if (!config.apiKey && !opts?.skipApiKey) throw new Error('LLM_API_KEY or OPENROUTER_API_KEY is required.');
   return config;
 }

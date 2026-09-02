@@ -44,13 +44,31 @@ describe('loadConfig', () => {
     }
   });
 
+  test('loads a custom LLM endpoint', () => {
+    const env = { key: process.env.LLM_API_KEY, url: process.env.LLM_BASE_URL };
+    process.env.LLM_API_KEY = 'test-key';
+    process.env.LLM_BASE_URL = 'https://gateway.example/v1';
+    try {
+      const config = loadConfig();
+      expect(config.apiKey).toBe('test-key');
+      expect(config.baseUrl).toBe('https://gateway.example/v1');
+    } finally {
+      if (env.key === undefined) delete process.env.LLM_API_KEY;
+      else process.env.LLM_API_KEY = env.key;
+      if (env.url === undefined) delete process.env.LLM_BASE_URL;
+      else process.env.LLM_BASE_URL = env.url;
+    }
+  });
+
   test('throws without an API key', () => {
-    const key = process.env.OPENROUTER_API_KEY;
+    const keys = { llm: process.env.LLM_API_KEY, openrouter: process.env.OPENROUTER_API_KEY };
+    delete process.env.LLM_API_KEY;
     delete process.env.OPENROUTER_API_KEY;
     try {
-      expect(() => loadConfig()).toThrow('OPENROUTER_API_KEY');
+      expect(() => loadConfig()).toThrow('LLM_API_KEY or OPENROUTER_API_KEY');
     } finally {
-      if (key) process.env.OPENROUTER_API_KEY = key;
+      if (keys.llm !== undefined) process.env.LLM_API_KEY = keys.llm;
+      if (keys.openrouter !== undefined) process.env.OPENROUTER_API_KEY = keys.openrouter;
     }
   });
 });

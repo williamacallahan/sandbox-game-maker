@@ -1,6 +1,6 @@
 # Game Maker
 
-Generate one-shot, self-contained HTML games and creative works from the Web UI using OpenRouter.
+Generate one-shot, self-contained HTML games and creative works from the Web UI using OpenRouter or an OpenAI-compatible Responses API.
 
 ## Web UI quick start
 
@@ -10,20 +10,30 @@ Generate one-shot, self-contained HTML games and creative works from the Web UI 
 bun install
 ```
 
-Requires [Bun](https://bun.sh) and an OpenRouter API key.
+Requires [Bun](https://bun.sh) and an LLM API key.
 
-### 2. Set the OpenRouter API key
+### 2. Configure the LLM
+
+OpenRouter is the default:
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-..."
+```
+
+For an OpenAI-compatible Responses API:
+
+```bash
+export LLM_API_KEY="..."
+export LLM_BASE_URL="https://dev.llm-gateway.iocloudhost.net/v1"
 ```
 
 You can also drop defaults into `agent.config.json` in the repo root:
 
 ```json
 {
-  "apiKey": "sk-or-...",
-  "model": "qwen/qwen3.8-flash",
+  "apiKey": "...",
+  "baseUrl": "https://dev.llm-gateway.iocloudhost.net/v1",
+  "model": "qwen3.8-27b",
   "maxToolCalls": 8,
   "maxContextTokens": 64000,
   "maxOutputTokens": 36000,

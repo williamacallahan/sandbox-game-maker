@@ -1,9 +1,10 @@
 import { OpenRouter } from '@openrouter/agent';
 import type { Item } from '@openrouter/agent';
 import { stepCountIs, maxCost } from '@openrouter/agent/stop-conditions';
-import type { BeforeRequestHook } from '@openrouter/sdk/hooks/types.js';
 import { generationsGetGeneration } from '@openrouter/sdk/funcs/generationsGetGeneration.js';
+import type { AfterSuccessHook, BeforeRequestHook } from '@openrouter/sdk/hooks/types.js';
 import { unwrapAsync } from '@openrouter/sdk/types/fp.js';
+import { z } from 'zod';
 import type { AgentConfig } from './config.js';
 import { Budget, makeTools } from './tools.js';
 
@@ -34,9 +35,9 @@ export type TurnUsage = BaseUsage & {
 
 /** Per-run generation metadata, shown by the UI and CLI after a run. */
 export type RunStats = BaseUsage & {
-  /** Provider that served the final generation (OpenRouter /generation metadata). */
+  /** Provider that served the final generation. */
   provider: string | null;
-  /** Decode speed of the final generation in tokens/second (from /generation). */
+  /** Decode speed reported by OpenRouter; unavailable from generic gateways. */
   tokensPerSec: number | null;
   /** Time to first streamed text/reasoning delta in ms; null when not streaming. */
   ttftMs: number | null;
@@ -49,33 +50,18 @@ export type RunStats = BaseUsage & {
   upstreamCost: number | null;
 };
 
-/**
- * Build an OpenRouter client that opts into router metadata on every model
- * response. The metadata includes the selected provider, so we can report it
- * synchronously instead of relying on the async /generation endpoint.
- */
-function createClient(config: AgentConfig): OpenRouter {
-  const metadataHook: BeforeRequestHook = {
-    beforeRequest: (_ctx, request) => {
-      const headers = new Headers(request.headers);
-      headers.set('X-OpenRouter-Metadata', 'enabled');
-      return new Request(request, { headers });
-    },
-  };
-  return new OpenRouter({ apiKey: config.apiKey, hooks: metadataHook });
-}
+const GatewayUsage = z.object({
+  by_model: z.array(z.object({ total_cost: z.number() })),
+});
 
-/**
- * Fetch OpenRouter's request/usage metadata for a generation. The record lands
- * asynchronously, typically ~5s after the response completes, so poll at
- * ~2s/5s/8s. Best-effort: failure returns null and the run reports without it.
- */
 async function fetchGeneration(client: OpenRouter, id: string) {
   for (const delayMs of [2000, 3000, 3000]) {
-    await new Promise((r) => setTimeout(r, delayMs));
+    await Bun.sleep(delayMs);
     try {
       return (await unwrapAsync(generationsGetGeneration(client, { id }))).data;
-    } catch {}
+    } catch {
+      continue;
+    }
   }
   return null;
 }
@@ -86,7 +72,28 @@ export async function runAgent(
   options?: { onEvent?: (event: AgentEvent) => void; signal?: AbortSignal },
 ) {
   const startedAt = Date.now();
-  const client = createClient(config);
+  const cacheKey = config.baseUrl ? crypto.randomUUID() : null;
+  let providerFromHeaders: string | null = null;
+  let upstreamCost: number | null = null;
+  const requestHook: BeforeRequestHook = {
+    beforeRequest: (_ctx, request) => {
+      const headers = new Headers(request.headers);
+      if (cacheKey) headers.set('X-LGW-Cache-Key', cacheKey);
+      else headers.set('X-OpenRouter-Metadata', 'enabled');
+      return new Request(request, { headers });
+    },
+  };
+  const responseHook: AfterSuccessHook = {
+    afterSuccess: (_ctx, response) => {
+      providerFromHeaders = response.headers.get('x-lgw-attempt-providers')?.split(',').at(-1) ?? null;
+      return response;
+    },
+  };
+  const client = new OpenRouter({
+    apiKey: config.apiKey,
+    ...(config.baseUrl && { serverURL: config.baseUrl }),
+    hooks: [requestHook, responseHook],
+  });
 
   const promptChars = typeof input === 'string' ? input.length : input.reduce((n, m) => n + m.content.length, 0);
   const budget = new Budget(config.maxToolCalls, config.maxContextTokens, promptChars);
@@ -95,14 +102,14 @@ export async function runAgent(
     {
       model: config.model,
       instructions: config.systemPrompt,
-      // Prefer Groq for the model, but allow OpenRouter to fall back if Groq is unavailable.
-      provider: { order: ['groq','venice'], allowFallbacks: true },
+      ...(!config.baseUrl && { provider: { order: ['groq', 'venice'], allowFallbacks: true } }),
       ...(config.maxOutputTokens && { maxOutputTokens: config.maxOutputTokens }),
       // loadConfig rejects effort + maxReasoningTokens together, so at most one is set here.
       ...(config.reasoningEffort && { reasoning: { effort: config.reasoningEffort } }),
       ...(config.maxReasoningTokens && { reasoning: { maxTokens: config.maxReasoningTokens } }),
       input: input as string | Item[],
       tools: makeTools(config, budget),
+      signal: options?.signal,
       // Steps also bound tool calls loosely (each tool-bearing step has >=1 call);
       // the Budget in tools.ts enforces the exact per-call and context caps.
       stopWhen: [stepCountIs(config.maxToolCalls + 2), maxCost(config.maxCost)],
@@ -118,7 +125,7 @@ export async function runAgent(
           const provider =
             meta?.endpoints?.available?.find((e) => e.selected)?.provider ??
             meta?.attempts?.[0]?.provider ??
-            null;
+            providerFromHeaders;
           options.onEvent({
             type: 'metadata',
             responseId: response.id,
@@ -157,7 +164,6 @@ export async function runAgent(
   // text deltas here as a source of truth for the final text.
   let accumulatedText = '';
   let firstTokenAt: number | null = null;
-  let upstreamCost: number | null = null;
 
   try {
     if (options?.onEvent) {
@@ -214,25 +220,42 @@ export async function runAgent(
     }
 
     const response = await result.getResponse();
-    // Aggregate across every model call in the run; response.usage covers only
-    // the final one. Take durationMs before the /generation fetch below so the
-    // metadata wait doesn't inflate the reported elapsed time.
     const totals = await result.getUsage();
     const durationMs = Date.now() - startedAt;
-    // OpenRouter returns the selected provider synchronously in
-    // openrouter_metadata when X-OpenRouter-Metadata is enabled. Fall back to
-    // the async /generation endpoint for cases where metadata is missing.
+    let gatewayCost: number | null = null;
+    if (config.baseUrl && cacheKey && providerFromHeaders) {
+      const usageUrl = new URL('../api/usage/session', config.baseUrl);
+      usageUrl.searchParams.set('cache_key', cacheKey);
+      try {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const usageResponse = await fetch(usageUrl, { headers: { Authorization: `Bearer ${config.apiKey}` } });
+          if (usageResponse.ok) {
+            gatewayCost = GatewayUsage.parse(await usageResponse.json()).by_model.reduce((sum, row) => sum + row.total_cost, 0);
+            break;
+          }
+          if (usageResponse.status !== 503) {
+            console.error(`Could not fetch gateway usage from ${usageUrl}: HTTP ${usageResponse.status}`);
+            break;
+          }
+          await Bun.sleep(Number(usageResponse.headers.get('retry-after') ?? 1) * 1000);
+        }
+      } catch (error) {
+        console.error(`Could not fetch gateway usage: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     const meta = response.openrouterMetadata;
-    const providerFromMeta =
-      meta?.endpoints?.available?.find((e) => e.selected)?.provider ??
-      meta?.attempts?.[0]?.provider ??
-      null;
-    const gen = response.id ? await fetchGeneration(client, response.id) : null;
+    const generation = !config.baseUrl && response.id ? await fetchGeneration(client, response.id) : null;
     const stats: RunStats = {
-      provider: providerFromMeta ?? gen?.providerName ?? null,
-      tokensPerSec: gen?.generationTime && gen.nativeTokensCompletion
-        ? Math.round((gen.nativeTokensCompletion / gen.generationTime) * 1000)
-        : null,
+      provider:
+        meta?.endpoints?.available?.find((e) => e.selected)?.provider ??
+        meta?.attempts?.[0]?.provider ??
+        providerFromHeaders ??
+        generation?.providerName ??
+        null,
+      tokensPerSec:
+        generation?.generationTime && generation.nativeTokensCompletion
+          ? Math.round((generation.nativeTokensCompletion / generation.generationTime) * 1000)
+          : null,
       ttftMs: firstTokenAt ? firstTokenAt - startedAt : null,
       inputTokens: totals.inputTokens,
       outputTokens: totals.outputTokens,
@@ -240,7 +263,7 @@ export async function runAgent(
       reasoningTokens: totals.reasoningTokens,
       toolCalls: budget.callCount,
       durationMs,
-      cost: totals.cost ?? null,
+      cost: gatewayCost ?? totals.cost ?? null,
       upstreamCost: upstreamCost ?? null,
     };
     const text = accumulatedText || (response.outputText ?? '');

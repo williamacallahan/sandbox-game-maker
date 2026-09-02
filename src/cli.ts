@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { parseArgs } from 'node:util';
-import { CREATE_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
+import { CREATE_SYSTEM_PROMPT, DEFAULTS, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
 import { runAgent, type AgentEvent } from './agent.js';
 
 // Pre-scan argv for output mode so the catch below can format errors
@@ -64,16 +64,16 @@ Options:
   -s, --system <text>          Override the built-in system prompt (wins over --create)
   -j, --json                   Output NDJSON event stream instead of text
   -q, --quiet                  No output; exit 0 on success, 1 on error
-  -m, --model <model>          Override the model (default: qwen/qwen3.8-flash)
+  -m, --model <model>          Override the model (default: ${DEFAULTS.model})
   -r, --reasoning <effort>     Reasoning effort: ${REASONING_EFFORTS.join('|')}
                                (default: unset, model decides)
-  -o, --out <dir>              Output directory for saved games (default: games)
-      --max-tool-calls <n>       Cap total tool calls (default: 8)
-      --max-context-tokens <n>   Cap context growth in tokens (default: 40000)
-      --max-output-tokens <n>    Cap output tokens per model call (default: model)
-      --max-reasoning-tokens <n> Cap reasoning tokens per model call (default: model;
+  -o, --out <dir>              Output directory for saved games (default: ${DEFAULTS.outDir})
+      --max-tool-calls <n>       Cap total tool calls (default: ${DEFAULTS.maxToolCalls})
+      --max-context-tokens <n>   Cap context growth in tokens (default: ${DEFAULTS.maxContextTokens})
+      --max-output-tokens <n>    Cap output tokens per model call (default: ${DEFAULTS.maxOutputTokens})
+      --max-reasoning-tokens <n> Cap reasoning tokens per model call (default: ${DEFAULTS.maxReasoningTokens ?? 'model default'};
                                  mutually exclusive with --reasoning)
-      --max-cost <n>             Cap spend in USD (default: 1.0)
+      --max-cost <n>             Cap spend in USD (default: ${DEFAULTS.maxCost})
   -h, --help                   Show this help message
 
 Prompt sources (in priority order): --prompt flag, positional argument, piped stdin.

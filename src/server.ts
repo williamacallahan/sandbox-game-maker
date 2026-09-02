@@ -16,16 +16,10 @@ type Post = {
   ts: number;
   instructions?: string;
   /** The effective generation settings, shown by the feed's Details toggle. */
-  settings?: {
-    model: string;
-    reasoningEffort: string | null;
-    maxToolCalls: number;
-    maxContextTokens: number;
-    maxOutputTokens: number | null;
-    maxReasoningTokens: number | null;
-    maxCost: number;
-    systemPrompt: string;
-  };
+  settings?: Pick<
+    AgentConfig,
+    'model' | 'reasoningEffort' | 'maxToolCalls' | 'maxContextTokens' | 'maxOutputTokens' | 'maxReasoningTokens' | 'maxCost' | 'systemPrompt'
+  >;
   /** Run metadata (provider, tokens/sec, ttft, totals) from the done event. */
   stats?: RunStats | null;
 };
@@ -199,11 +193,11 @@ const server = Bun.serve({
               instructions: savedInstructions ?? undefined,
               settings: {
                 model: config.model,
-                reasoningEffort: config.reasoningEffort ?? null,
+                reasoningEffort: config.reasoningEffort,
                 maxToolCalls: config.maxToolCalls,
                 maxContextTokens: config.maxContextTokens,
-                maxOutputTokens: config.maxOutputTokens ?? null,
-                maxReasoningTokens: config.maxReasoningTokens ?? null,
+                maxOutputTokens: config.maxOutputTokens,
+                maxReasoningTokens: config.maxReasoningTokens,
                 maxCost: config.maxCost,
                 systemPrompt: config.systemPrompt,
               },
