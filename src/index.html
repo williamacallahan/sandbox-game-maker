@@ -8,7 +8,7 @@
   :root {
     --border: #dbdbdb;
     --text: #262626;
-    --muted: #8e8e8e;
+    --muted: #6b6b6b;
     --bg: #fafafa;
     --grad: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5);
   }
@@ -69,7 +69,7 @@
     z-index: 10;
   }
   .settings .tip:hover::after { opacity: 1; }
-  .stream .think { color: #8e8e8e; font-style: italic; }
+  .stream .think { color: var(--muted); font-style: italic; }
   .chips { display: flex; gap: 6px; padding: 6px 12px 0; }
   .chip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
   .chip.on { border-color: transparent; background: var(--grad); color: #fff; font-weight: 600; }

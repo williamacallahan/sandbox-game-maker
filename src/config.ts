@@ -113,8 +113,7 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}, opts?: { skipAp
     if (err.code !== 'ENOENT') throw err;
   }
 
-  if (process.env.OPENROUTER_API_KEY) config.apiKey = process.env.OPENROUTER_API_KEY;
-  if (process.env.LLM_API_KEY) config.apiKey = process.env.LLM_API_KEY;
+  config.apiKey = process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY || config.apiKey;
   if (process.env.LLM_BASE_URL) config.baseUrl = process.env.LLM_BASE_URL;
   if (process.env.AGENT_MODEL) config.model = process.env.AGENT_MODEL;
   if (process.env.AGENT_MAX_TOOL_CALLS) config.maxToolCalls = positiveNumber('AGENT_MAX_TOOL_CALLS', process.env.AGENT_MAX_TOOL_CALLS);

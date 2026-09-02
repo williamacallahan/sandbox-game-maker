@@ -3,6 +3,7 @@ import type { Item } from '@openrouter/agent';
 import { stepCountIs, maxCost } from '@openrouter/agent/stop-conditions';
 import { generationsGetGeneration } from '@openrouter/sdk/funcs/generationsGetGeneration.js';
 import type { AfterSuccessHook, BeforeRequestHook } from '@openrouter/sdk/hooks/types.js';
+import type { OpenRouterMetadata } from '@openrouter/sdk/models/openroutermetadata.js';
 import { unwrapAsync } from '@openrouter/sdk/types/fp.js';
 import { z } from 'zod';
 import type { AgentConfig } from './config.js';
@@ -53,6 +54,10 @@ export type RunStats = BaseUsage & {
 const GatewayUsage = z.object({
   by_model: z.array(z.object({ total_cost: z.number() })),
 });
+
+function providerFromMeta(meta: OpenRouterMetadata | undefined): string | null {
+  return meta?.endpoints?.available?.find((e) => e.selected)?.provider ?? meta?.attempts?.[0]?.provider ?? null;
+}
 
 async function fetchGeneration(client: OpenRouter, id: string) {
   for (const delayMs of [2000, 3000, 3000]) {
@@ -121,11 +126,7 @@ export async function runAgent(
           upstreamCost = (upstreamCost ?? 0) + upstream;
         }
         if (u && options?.onEvent) {
-          const meta = response.openrouterMetadata;
-          const provider =
-            meta?.endpoints?.available?.find((e) => e.selected)?.provider ??
-            meta?.attempts?.[0]?.provider ??
-            providerFromHeaders;
+          const provider = providerFromMeta(response.openrouterMetadata) ?? providerFromHeaders;
           options.onEvent({
             type: 'metadata',
             responseId: response.id,
@@ -224,7 +225,7 @@ export async function runAgent(
     const durationMs = Date.now() - startedAt;
     let gatewayCost: number | null = null;
     if (config.baseUrl && cacheKey && providerFromHeaders) {
-      const usageUrl = new URL('../api/usage/session', config.baseUrl);
+      const usageUrl = new URL('api/usage/session', config.baseUrl.replace(/\/?$/, '/'));
       usageUrl.searchParams.set('cache_key', cacheKey);
       try {
         for (let attempt = 0; attempt < 3; attempt++) {
@@ -243,12 +244,10 @@ export async function runAgent(
         console.error(`Could not fetch gateway usage: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    const meta = response.openrouterMetadata;
     const generation = !config.baseUrl && response.id ? await fetchGeneration(client, response.id) : null;
     const stats: RunStats = {
       provider:
-        meta?.endpoints?.available?.find((e) => e.selected)?.provider ??
-        meta?.attempts?.[0]?.provider ??
+        providerFromMeta(response.openrouterMetadata) ??
         providerFromHeaders ??
         generation?.providerName ??
         null,
