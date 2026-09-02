@@ -162,13 +162,13 @@ function reset(){
 }
 
 /* ---------------- waves ---------------- */
-function banner(s){ banner = s; bannerT = 1.7; }
+function setBanner(s){ banner = s; bannerT = 1.7; }
 function startWave(){
   state.wave++;
   sp.toSpawn = Math.min(3 + state.wave, 22);
   sp.timer = 0.4;
   if(state.wave > 1){ PL.hp = Math.min(PL.maxhp, PL.hp + 2); addText(PL.x, PL.y-30, '+2 HP', '#ff8f8f'); }
-  banner('WAVE ' + state.wave);
+  setBanner('WAVE ' + state.wave);
   sfx.wave();
 }
 function pickType(){

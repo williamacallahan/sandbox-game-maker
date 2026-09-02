@@ -193,7 +193,7 @@ function upd(dt){
   for(const t of texts){t.y-=tile*.6*dt;t.life-=dt;}
   texts=texts.filter(t=>t.life>0);
   // clamp to map
-  if(!hitsWall(P.x,P.y,P.r)){if(hitsWall(P.x-P.spd,P.y,P.r))P.x+=P.spd;if(hitsWall(P.x+P.spd,P.y,P.r))P.x-=P.spd;if(hitsWall(P.x,P.y-P.spd,P.r))P.y+=P.spd;if(hitsWall(P.x,P.y+P.spd,P.r))P.y-=P.spd;}
+  if(!hitsWall(P.x,P.y,P.r)){if(hitsWall(P.x-P.sp,P.y,P.r))P.x+=P.sp;if(hitsWall(P.x+P.sp,P.y,P.r))P.x-=P.sp;if(hitsWall(P.x,P.y-P.sp,P.r))P.y+=P.sp;if(hitsWall(P.x,P.y+P.sp,P.r))P.y-=P.sp;}
   enemies=enemies.filter(e=>e.hp>0);
 }
 function showOv(t,m){const o=document.getElementById('overlay');o.style.display='flex';

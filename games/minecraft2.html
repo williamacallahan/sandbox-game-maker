@@ -522,7 +522,7 @@ void main(){
     float cl=smoothstep(0.55,0.79,c)*clamp(d.y*2.6,0.0,1.0);
     col=mix(col,mix(vec3(0.09,0.11,0.19),vec3(1.0,1.0,1.0),day),cl*0.88);
   }
-  vec2 st=floor(d*190.0);
+  vec2 st=floor(d.xz*190.0);
   float h=hs(st);
   float star=step(0.9974,h)*(1.0-day)*clamp(d.y*3.2,0.0,1.0);
   col+=vec3(star)*(0.55+0.45*sin(uTime*3.0+h*44.0));
