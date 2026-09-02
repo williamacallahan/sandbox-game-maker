@@ -1249,7 +1249,6 @@ try{
   for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++) ensureChunk(scx+dx,scz+dz);
   buildHotbar();updateStats();
   setTimeout(hideChip,15000);
-  openOverlay();
   requestAnimationFrame(frame);
 }catch(e){
   errEl.style.display='flex';
