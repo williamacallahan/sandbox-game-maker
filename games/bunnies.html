@@ -367,7 +367,6 @@ let playing = false;
 let combo = 0;
 let maxCombo = 0;
 let bestScore = 0;
-try { bestScore = parseInt(localStorage.getItem('bunnyPopBest') || '0', 10); } catch {}
 let spawnInterval = null;
 let timerInterval = null;
 let spawnTimer = null;
@@ -623,7 +622,6 @@ function endGame() {
 
   if (score > bestScore) {
     bestScore = score;
-    try { localStorage.setItem('bunnyPopBest', bestScore); } catch {}
   }
 
   finalScoreEl.textContent = `Score: ${score} | Best Combo: ${maxCombo}x`;

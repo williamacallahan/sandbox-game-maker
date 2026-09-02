@@ -307,7 +307,6 @@ function die(){
   p.alive=false; state='over'; deathT=0; shake=1.7; flash=1;
   boom(); burst(p.x,p.y,30,90,field.s*0.016); burst(p.x,p.y,0,40,field.s*0.010);
   best=Math.max(best,score);
-  if(best>0){ try{ localStorage.setItem('echoloop_best',String(best)); }catch(e){} }
   ghosts.forEach(function(g){ g.alive=false; });
   document.getElementById('sScore').textContent=score;
   document.getElementById('sLoops').textContent=loop;
@@ -321,7 +320,6 @@ function die(){
                 : 'You left '+maxEcho+' echo'+(maxEcho===1?'':'es')+ ' behind, still gathering in the dark.';
   setTimeout(function(){ if(state==='over') document.getElementById('over').classList.add('show'); },620);
 }
-try{ best = parseInt(localStorage.getItem('echoloop_best')||'0',10)||0; }catch(e){}
 
 /* ---------- simulation ---------- */
 function sim(){

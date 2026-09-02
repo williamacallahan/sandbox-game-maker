@@ -104,6 +104,9 @@ function validateHtmlGame(path: string, content: string, issues: string[]) {
   if (/(?:^|[^\w.])sessionStorage\s*[.(]/i.test(content)) {
     issues.push('HTML uses sessionStorage: the gallery iframe is sandboxed without allow-same-origin, so storage APIs throw.');
   }
+  if (/(?:^|[^\w.])(?:window|globalThis)\s*\.\s*(?:localStorage|sessionStorage)\s*[.(]/i.test(content)) {
+    issues.push('HTML accesses localStorage/sessionStorage through window/globalThis: storage APIs throw in the gallery iframe.');
+  }
 
   // Fill the square viewport.
   const bodyTag = /<body([^>]*)>/i.exec(content);

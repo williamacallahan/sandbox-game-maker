@@ -14,7 +14,7 @@ export type AgentEvent =
   | { type: 'tool_call'; name: string; callId: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; callId: string; output: string }
   | { type: 'reasoning'; delta: string }
-  | { type: 'metadata'; responseId: string; turnNumber: number; model: string; usage: TurnUsage }
+  | { type: 'metadata'; responseId: string; turnNumber: number; model: string; provider: string | null; usage: TurnUsage }
   | { type: 'turn_end' }
   | { type: 'done'; durationMs: number; stats: RunStats };
 
@@ -114,11 +114,17 @@ export async function runAgent(
           upstreamCost = (upstreamCost ?? 0) + upstream;
         }
         if (u && options?.onEvent) {
+          const meta = response.openrouterMetadata;
+          const provider =
+            meta?.endpoints?.available?.find((e) => e.selected)?.provider ??
+            meta?.attempts?.[0]?.provider ??
+            null;
           options.onEvent({
             type: 'metadata',
             responseId: response.id,
             turnNumber: context.numberOfTurns,
             model: response.model,
+            provider,
             usage: {
               inputTokens: u.inputTokens,
               outputTokens: u.outputTokens,
