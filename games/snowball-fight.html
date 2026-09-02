@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snowball Fight</title>
+<style>
+html, body { margin: 0; overflow: hidden; width: 100%; height: 100%; background: #9ec9e8; touch-action: none; }
+canvas { display: block; width: 100vw; height: 100vh; }
+#hud {
+  position: absolute; top: 8px; left: 8px; right: 8px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  font-family: sans-serif; color: #123; pointer-events: none;
+  font-weight: 700; font-size: 18px; text-shadow: 0 1px 0 #fff;
+}
+#pauseBtn {
+  pointer-events: auto; cursor: pointer;
+  border: 0; border-radius: 8px; padding: 8px 14px;
+  background: #fff; color: #123; font-weight: 700; font-size: 14px;
+}
+[data-game-overlay] {
+  position: absolute; inset: 0; display: none;
+  align-items: center; justify-content: center; flex-direction: column;
+  background: rgba(20, 40, 70, 0.55); color: #fff;
+  font-family: sans-serif; gap: 12px;
+}
+[data-game-overlay].show { display: flex; }
+[data-game-overlay] button {
+  cursor: pointer; border: 0; border-radius: 10px; padding: 10px 20px;
+  font-weight: 700; font-size: 16px; background: #fff; color: #123;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <span id="score">0</span>
+  <button id="pauseBtn" type="button">Pause</button>
+</div>
+<div id="pauseOv" data-game-overlay>
+  <div id="pauseMsg">Paused</div>
+  <button id="resumeBtn" type="button">Resume</button>
+</div>
+<script>
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var scoreEl = document.getElementById("score");
+var pauseBtn = document.getElementById("pauseBtn");
+var pauseOv = document.getElementById("pauseOv");
+var resumeBtn = document.getElementById("resumeBtn");
+var pauseMsg = document.getElementById("pauseMsg");
+var W = 1, H = 1, paused = false, over = false;
+var leftOn = false, rightOn = false;
+var playerX = 0.5, playerY = 0.88, playerR = 0.045;
+var balls = [];
+var foes = [];
+var flakes = [];
+var score = 0;
+var spawn = 0;
+var hitFlash = 0;
+var lives = 3;
+var fi;
+for (fi = 0; fi < 60; fi++) {
+  flakes.push({ x: Math.random(), y: Math.random(), s: 0.4 + Math.random(), v: 0.08 + Math.random() * 0.12 });
+}
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+}
+window.addEventListener("resize", resize);
+resize();
+function setPaused(p) {
+  if (over) return;
+  paused = p;
+  if (paused) pauseOv.classList.add("show");
+  else pauseOv.classList.remove("show");
+}
+function hideOverlay() {
+  pauseOv.classList.remove("show");
+  paused = false;
+}
+window.addEventListener("message", function (e) {
+  var d = e.data;
+  if (d && d.type === "game-maker:dismiss-overlay") hideOverlay();
+});
+pauseBtn.addEventListener("click", function () { setPaused(!paused); });
+resumeBtn.addEventListener("click", function () { hideOverlay(); });
+pauseOv.addEventListener("click", function (e) {
+  if (e.target === pauseOv) hideOverlay();
+});
+window.addEventListener("keydown", function (e) {
+  if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftOn = true;
+  if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightOn = true;
+  if (e.key === "p" || e.key === "P" || e.key === "Escape") {
+    if (paused) hideOverlay();
+    else setPaused(true);
+  }
+  if (over && (e.key === " " || e.key === "Enter")) restart();
+});
+window.addEventListener("keyup", function (e) {
+  if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") leftOn = false;
+  if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") rightOn = false;
+});
+canvas.addEventListener("click", function (e) {
+  if (paused || over) return;
+  throwSnow(e.clientX / W, e.clientY / H);
+});
+var dragging = false;
+canvas.addEventListener("pointerdown", function (e) {
+  dragging = true;
+  if (!paused && !over) playerX = e.clientX / W;
+});
+window.addEventListener("pointermove", function (e) {
+  if (dragging && !paused && !over) playerX = Math.max(0.06, Math.min(0.94, e.clientX / W));
+});
+window.addEventListener("pointerup", function () { dragging = false; });
+function throwSnow(tx, ty) {
+  var px = playerX, py = playerY - 0.02;
+  var dx = tx - px, dy = ty - py;
+  var len = Math.sqrt(dx * dx + dy * dy) || 1;
+  balls.push({ x: px, y: py, vx: (dx / len) * 0.9, vy: (dy / len) * 0.9, fromP: true, r: 0.018 });
+}
+function restart() {
+  over = false;
+  paused = false;
+  pauseOv.classList.remove("show");
+  score = 0;
+  lives = 3;
+  balls = [];
+  foes = [];
+  spawn = 0;
+  playerX = 0.5;
+  scoreEl.textContent = "0";
+}
+function spawnFoe() {
+  foes.push({
+    x: 0.1 + Math.random() * 0.8,
+    y: -0.08,
+    vx: (Math.random() - 0.5) * 0.15,
+    cool: 0.6 + Math.random() * 1.2,
+    r: 0.05
+  });
+}
+function dist(ax, ay, bx, by) {
+  var dx = ax - bx, dy = ay - by;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+var last = performance.now();
+function frame(now) {
+  var dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  var i, b, f;
+  if (!paused && !over) {
+    var spd = 0.55;
+    if (leftOn) playerX -= spd * dt;
+    if (rightOn) playerX += spd * dt;
+    playerX = Math.max(0.06, Math.min(0.94, playerX));
+    spawn += dt;
+    var rate = Math.max(0.5, 1.4 - score * 0.01);
+    if (spawn > rate) { spawn = 0; spawnFoe(); }
+    for (i = foes.length - 1; i >= 0; i--) {
+      f = foes[i];
+      f.y += 0.08 * dt;
+      f.x += f.vx * dt;
+      if (f.x < 0.08 || f.x > 0.92) f.vx *= -1;
+      f.cool -= dt;
+      if (f.cool <= 0 && f.y > 0.05 && f.y < 0.7) {
+        f.cool = 1.1 + Math.random();
+        var dx = playerX - f.x, dy = playerY - f.y;
+        var len = Math.sqrt(dx * dx + dy * dy) || 1;
+        balls.push({ x: f.x, y: f.y + 0.03, vx: (dx / len) * 0.45, vy: (dy / len) * 0.45, fromP: false, r: 0.016 });
+      }
+      if (f.y > 1.1) foes.splice(i, 1);
+    }
+    for (i = balls.length - 1; i >= 0; i--) {
+      b = balls[i];
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      if (b.x < -0.1 || b.x > 1.1 || b.y < -0.1 || b.y > 1.1) { balls.splice(i, 1); continue; }
+      if (b.fromP) {
+        var hit = false;
+        for (var j = foes.length - 1; j >= 0; j--) {
+          if (dist(b.x, b.y, foes[j].x, foes[j].y) < b.r + foes[j].r) {
+            foes.splice(j, 1);
+            score += 10;
+            scoreEl.textContent = String(score);
+            hit = true;
+            break;
+          }
+        }
+        if (hit) { balls.splice(i, 1); continue; }
+      } else if (dist(b.x, b.y, playerX, playerY) < b.r + playerR * 0.7) {
+        balls.splice(i, 1);
+        lives -= 1;
+        hitFlash = 0.25;
+        if (lives <= 0) {
+          over = true;
+          pauseMsg.textContent = "Game over - " + score + " pts. Space to retry";
+          pauseOv.classList.add("show");
+        }
+      }
+    }
+    hitFlash = Math.max(0, hitFlash - dt);
+  }
+  for (i = 0; i < flakes.length; i++) {
+    flakes[i].y += flakes[i].v * dt * (paused ? 0.15 : 1);
+    if (flakes[i].y > 1) flakes[i].y = 0;
+  }
+  drawScene();
+  requestAnimationFrame(frame);
+}
+function drawScene() {
+  ctx.fillStyle = "#7eb6e0";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  var k;
+  for (k = 0; k < flakes.length; k++) {
+    ctx.beginPath();
+    ctx.arc(flakes[k].x * W, flakes[k].y * H, flakes[k].s * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#f4fbff";
+  ctx.beginPath();
+  ctx.ellipse(W * 0.5, H * 1.05, W * 0.7, H * 0.18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  var i, f, px, py, s;
+  for (i = 0; i < foes.length; i++) {
+    f = foes[i];
+    px = f.x * W; py = f.y * H; s = f.r * Math.min(W, H);
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(px, py + s * 0.55, s * 0.85, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px, py - s * 0.35, s * 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#222";
+    ctx.beginPath(); ctx.arc(px - s * 0.18, py - s * 0.4, s * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + s * 0.18, py - s * 0.4, s * 0.08, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#e07020";
+    ctx.beginPath();
+    ctx.moveTo(px, py - s * 0.28);
+    ctx.lineTo(px + s * 0.45, py - s * 0.22);
+    ctx.lineTo(px, py - s * 0.16);
+    ctx.fill();
+  }
+  px = playerX * W; py = playerY * H; s = playerR * Math.min(W, H);
+  ctx.fillStyle = hitFlash > 0 ? "#ffb0b0" : "#ffde59";
+  ctx.beginPath(); ctx.arc(px, py, s, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#3a2a10";
+  ctx.beginPath(); ctx.arc(px - s * 0.28, py - s * 0.15, s * 0.12, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(px + s * 0.28, py - s * 0.15, s * 0.12, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = "#3a2a10"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(px, py + s * 0.15, s * 0.35, 0.15, Math.PI - 0.15); ctx.stroke();
+  ctx.fillStyle = "#e8f6ff";
+  ctx.beginPath(); ctx.ellipse(px, py - s * 1.05, s * 0.85, s * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+  for (i = 0; i < balls.length; i++) {
+    var b = balls[i];
+    ctx.fillStyle = b.fromP ? "#fff" : "#cfe8ff";
+    ctx.beginPath();
+    ctx.arc(b.x * W, b.y * H, b.r * Math.min(W, H), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#123";
+  ctx.font = "16px sans-serif";
+  ctx.fillText("lives " + lives, 12, H - 16);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
