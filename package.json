@@ -10,6 +10,7 @@
     "dev:openrouter": "doppler run --no-check-version --silent -p personal -c dev --no-fallback --forward-signals=true --only-secrets OPENROUTER_API_KEY -- bun --watch src/cli.ts",
     "ui": "bun run src/server.ts",
     "ui:openrouter": "doppler run --no-check-version --silent -p personal -c dev --no-fallback --forward-signals=true --only-secrets OPENROUTER_API_KEY -- bun --watch src/server.ts",
+    "ui:llm-gateway": "doppler run --no-check-version --silent -p personal -c dev --no-fallback --forward-signals=true --only-secrets LLM_GATEWAY_SANDBOX_EVALS_API_KEY,LLM_GATEWAY_URL --command 'export LLM_API_KEY=\"$LLM_GATEWAY_SANDBOX_EVALS_API_KEY\" LLM_BASE_URL=\"${LLM_GATEWAY_URL%/}/v1\"; exec bun --watch src/server.ts'",
     "build": "tsc --noEmit",
     "test": "bun test"
   },
