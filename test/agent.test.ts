@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Budget } from '../src/tools.js';
-import { loadConfig } from '../src/config.js';
+import { CREATE_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
 
 describe('Budget', () => {
   test('enforces tool call limit', () => {
@@ -34,6 +34,14 @@ describe('loadConfig', () => {
     const c = loadConfig({ maxToolCalls: 3 }, { skipApiKey: true });
     expect(c.maxToolCalls).toBe(3);
     expect(c.outDir).toBe('games');
+  });
+
+  test('requires unobstructed games and dismissible overlays', () => {
+    const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
+    for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT]) {
+      expect(prompt).toContain('game-maker:dismiss-overlay');
+      expect(prompt).toContain('instructions field');
+    }
   });
 
   test('throws without an API key', () => {

@@ -58,9 +58,13 @@
   .stream.expanded { max-height: 60vh; }
   .expand-btn { margin-left: auto; border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; color: var(--muted); cursor: pointer; flex: none; }
   .expand-btn:hover { color: var(--text); }
+  .head-actions { margin-left: auto; display: flex; gap: 6px; }
+  .head-actions .expand-btn { margin-left: 0; }
 
   /* per-post details */
   .detail-panel { border-top: 1px solid var(--border); padding: 10px 12px; background: var(--bg); font-size: 12px; }
+  .how-panel p { margin: 0 0 8px; white-space: pre-wrap; }
+  .dismiss-overlay { border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; background: #fff; color: var(--text); font: inherit; cursor: pointer; }
   .detail-rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
   .detail-rows span { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .04em; align-self: center; }
   .detail-sys { margin: 8px 0 0; padding: 8px; max-height: 140px; overflow-y: auto; background: #111; color: #e8e8e8; border-radius: 6px; font: 10px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: break-word; }
@@ -191,16 +195,29 @@ function postCard(p) {
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
     '<div class="who"><b>' + esc(name) + '</b><small>' + timeAgo(p.ts) + '</small></div>' +
-    '<button class="expand-btn details-btn" type="button">Details</button></div>' +
-    '<div class="detail-panel" hidden>' + detailsPanel(p) + '</div>' +
+    '<div class="head-actions"><button class="expand-btn how-btn" type="button" aria-expanded="false">How to play</button>' +
+    '<button class="expand-btn details-btn" type="button" aria-expanded="false">Details</button></div></div>' +
+    '<div class="detail-panel how-panel" hidden><p>' + esc(p.instructions ?? 'No instructions were recorded for this game.') + '</p>' +
+    '<button class="dismiss-overlay" type="button">Dismiss game overlay</button></div>' +
+    '<div class="detail-panel settings-panel" hidden>' + detailsPanel(p) + '</div>' +
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
     '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a></div>' +
     '<div class="caption"><b>' + esc(name) + '</b>' + esc(p.prompt) + modelTag + '</div>';
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
-  $('.details-btn', card).addEventListener('click', () => {
-    const panel = $('.detail-panel', card);
-    panel.hidden = !panel.hidden;
+  for (const [buttonSelector, panelSelector] of [
+    ['.how-btn', '.how-panel'],
+    ['.details-btn', '.settings-panel'],
+  ]) {
+    const button = $(buttonSelector, card);
+    button.addEventListener('click', () => {
+      const panel = $(panelSelector, card);
+      panel.hidden = !panel.hidden;
+      button.setAttribute('aria-expanded', String(!panel.hidden));
+    });
+  }
+  $('.dismiss-overlay', card).addEventListener('click', () => {
+    $('iframe', card).contentWindow?.postMessage({ type: 'game-maker:dismiss-overlay' }, '*');
   });
   return card;
 }

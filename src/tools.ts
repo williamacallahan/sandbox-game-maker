@@ -68,10 +68,11 @@ export function makeTools(config: AgentConfig, budget: Budget) {
   return [
     tool({
       name: 'save_game',
-      description: `Save a finished game file into the output directory (${config.outDir}/). Filename must be kebab-case ending in .html or .js. Returns the saved path.`,
+      description: `Save a finished game file into the output directory (${config.outDir}/). Filename must be kebab-case ending in .html or .js. Include concise player instructions for the gallery's How to play panel. Returns the saved path.`,
       inputSchema: z.object({
         filename: z.string().describe('Kebab-case filename, e.g. "snake.html" or "guess-number.js"'),
         content: z.string().describe('Complete, self-contained file content'),
+        instructions: z.string().min(1).max(500).describe('Concise controls and objective for the player'),
       }),
       execute: async ({ filename, content }) => {
         const limit = budget.take();

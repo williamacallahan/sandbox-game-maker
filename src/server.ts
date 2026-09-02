@@ -14,6 +14,7 @@ type Post = {
   prompt: string;
   model: string;
   ts: number;
+  instructions?: string;
   /** The effective generation settings, shown by the feed's Details toggle. */
   settings?: {
     model: string;
@@ -112,7 +113,12 @@ const server = Bun.serve({
       // Bare .js doubles as the runner's <script src> — a real script MIME is
       // required: the sandboxed page's opaque origin makes the fetch
       // cross-origin, and browsers (ORB) block text/plain scripts there.
-      return new Response(file, { headers: { 'content-type': game[2] === 'html' ? 'text/html' : 'text/javascript' } });
+      return new Response(file, {
+        headers: {
+          'content-type': game[2] === 'html' ? 'text/html' : 'text/javascript',
+          ...(game[2] === 'js' && { 'access-control-allow-origin': '*' }),
+        },
+      });
     }
 
     if (url.pathname === '/api/generate' && req.method === 'POST') {
@@ -155,7 +161,9 @@ const server = Bun.serve({
           // take the filename from the untruncated tool_call args and only use
           // the result's stable success prefix (never cut by end-truncation).
           let pendingFile: string | null = null;
+          let pendingInstructions: string | null = null;
           let savedFile: string | null = null;
+          let savedInstructions: string | null = null;
           let runStats: RunStats | null = null;
           try {
             const fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
@@ -163,9 +171,14 @@ const server = Bun.serve({
               onEvent: (e) => {
                 if (e.type === 'tool_call' && e.name === 'save_game' && typeof e.args.filename === 'string') {
                   pendingFile = e.args.filename;
+                  pendingInstructions = typeof e.args.instructions === 'string' ? e.args.instructions.trim() : null;
                 } else if (e.type === 'tool_result' && e.name === 'save_game') {
-                  if (pendingFile && e.output.startsWith('{"written":true')) savedFile = pendingFile;
+                  if (pendingFile && e.output.startsWith('{"written":true')) {
+                    savedFile = pendingFile;
+                    savedInstructions = pendingInstructions;
+                  }
                   pendingFile = null;
+                  pendingInstructions = null;
                 } else if (e.type === 'done') {
                   runStats = e.stats;
                 }
@@ -183,6 +196,7 @@ const server = Bun.serve({
               prompt,
               model: config.model,
               ts: Date.now(),
+              instructions: savedInstructions ?? undefined,
               settings: {
                 model: config.model,
                 reasoningEffort: config.reasoningEffort ?? null,
