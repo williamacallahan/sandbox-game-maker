@@ -2,7 +2,7 @@ import { OpenRouter } from '@openrouter/agent';
 import type { Item } from '@openrouter/agent';
 import { stepCountIs, maxCost } from '@openrouter/agent/stop-conditions';
 import { generationsGetGeneration } from '@openrouter/sdk/funcs/generationsGetGeneration.js';
-import type { AfterSuccessHook, BeforeRequestHook } from '@openrouter/sdk/hooks/types.js';
+import type { AfterSuccessHook } from '@openrouter/sdk/hooks/types.js';
 import type { OpenRouterMetadata } from '@openrouter/sdk/models/openroutermetadata.js';
 import { unwrapAsync } from '@openrouter/sdk/types/fp.js';
 import { z } from 'zod';
@@ -59,11 +59,11 @@ function providerFromMeta(meta: OpenRouterMetadata | undefined): string | null {
   return meta?.endpoints?.available?.find((e) => e.selected)?.provider ?? meta?.attempts?.[0]?.provider ?? null;
 }
 
-async function fetchGeneration(client: OpenRouter, id: string) {
+async function fetchGeneration(client: OpenRouter, id: string, headers: Record<string, string>) {
   for (const delayMs of [2000, 3000, 3000]) {
     await Bun.sleep(delayMs);
     try {
-      return (await unwrapAsync(generationsGetGeneration(client, { id }))).data;
+      return (await unwrapAsync(generationsGetGeneration(client, { id }, { headers }))).data;
     } catch {
       continue;
     }
@@ -80,14 +80,7 @@ export async function runAgent(
   const cacheKey = config.baseUrl ? crypto.randomUUID() : null;
   let providerFromHeaders: string | null = null;
   let upstreamCost: number | null = null;
-  const requestHook: BeforeRequestHook = {
-    beforeRequest: (_ctx, request) => {
-      const headers = new Headers(request.headers);
-      if (cacheKey) headers.set('X-LGW-Cache-Key', cacheKey);
-      else headers.set('X-OpenRouter-Metadata', 'enabled');
-      return new Request(request, { headers });
-    },
-  };
+  const headers: Record<string, string> = cacheKey ? { 'X-LGW-Cache-Key': cacheKey } : { 'X-OpenRouter-Metadata': 'enabled' };
   const responseHook: AfterSuccessHook = {
     afterSuccess: (_ctx, response) => {
       providerFromHeaders = response.headers.get('x-lgw-attempt-providers')?.split(',').at(-1) ?? null;
@@ -97,7 +90,7 @@ export async function runAgent(
   const client = new OpenRouter({
     apiKey: config.apiKey,
     ...(config.baseUrl && { serverURL: config.baseUrl }),
-    hooks: [requestHook, responseHook],
+    hooks: [responseHook],
   });
 
   const promptChars = typeof input === 'string' ? input.length : input.reduce((n, m) => n + m.content.length, 0);
@@ -149,7 +142,7 @@ export async function runAgent(
     // SDK retries the individual failing HTTP call with backoff (default covers
     // 5XX only); adding 429 here is safe — a per-call retry never re-executes
     // tools, unlike replaying the whole agent from the initial prompt.
-    { retryCodes: ['429', '5XX'] },
+    { headers, retryCodes: ['429', '5XX'] },
   );
 
   // Wire AbortSignal → result.cancel() so the underlying network stream
@@ -163,7 +156,7 @@ export async function runAgent(
   // Draining getTextStream concurrently with getItemsStream reads the
   // stream dry, so getResponse().outputText ends up empty. We accumulate
   // text deltas here as a source of truth for the final text.
-  let accumulatedText = '';
+  const textChunks: string[] = [];
   let firstTokenAt: number | null = null;
 
   try {
@@ -189,7 +182,7 @@ export async function runAgent(
           if (options?.signal?.aborted) break;
           firstTokenAt ??= Date.now();
           options.onEvent!({ type: 'text', delta });
-          accumulatedText += delta;
+          textChunks.push(delta);
         }
       };
 
@@ -244,7 +237,7 @@ export async function runAgent(
         console.error(`Could not fetch gateway usage: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    const generation = !config.baseUrl && response.id ? await fetchGeneration(client, response.id) : null;
+    const generation = !config.baseUrl && response.id ? await fetchGeneration(client, response.id, headers) : null;
     const stats: RunStats = {
       provider:
         providerFromMeta(response.openrouterMetadata) ??
@@ -265,7 +258,7 @@ export async function runAgent(
       cost: gatewayCost ?? totals.cost ?? null,
       upstreamCost: upstreamCost ?? null,
     };
-    const text = accumulatedText || (response.outputText ?? '');
+    const text = textChunks.join('') || (response.outputText ?? '');
     options?.onEvent?.({ type: 'done', durationMs, stats });
     return { text, output: response.output, durationMs, stats };
   } finally {

@@ -67,27 +67,22 @@ function isAllowedUrl(url: string): boolean {
   return url.startsWith('data:') || url === '' || url.startsWith('#');
 }
 
-function validateHtmlGame(path: string, content: string, issues: string[]) {
+function validateHtmlGame(content: string, issues: string[]) {
   // No external network requests.
-  const scriptSrc = /<script[^>]*src\s*=\s*["']([^"']+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = scriptSrc.exec(content)) !== null) {
-    const url = m[1].trim();
+  for (const match of content.matchAll(/<script[^>]*src\s*=\s*["']([^"']+)["']/gi)) {
+    const url = match[1].trim();
     if (!isAllowedUrl(url)) issues.push(`External <script src> ${JSON.stringify(url)}: inline all JavaScript.`);
   }
-  const mediaSrc = /<(?:img|video|audio|source)[^>]*\s(?:src|srcset)\s*=\s*["']([^"']+)["']/gi;
-  while ((m = mediaSrc.exec(content)) !== null) {
-    const url = m[1].trim();
+  for (const match of content.matchAll(/<(?:img|video|audio|source)[^>]*\s(?:src|srcset)\s*=\s*["']([^"']+)["']/gi)) {
+    const url = match[1].trim();
     if (!isAllowedUrl(url)) issues.push(`External media src ${JSON.stringify(url)}: use data URIs or draw with CSS/SVG/canvas.`);
   }
-  const linkHref = /<link[^>]*\shref\s*=\s*["']([^"']+)["']/gi;
-  while ((m = linkHref.exec(content)) !== null) {
-    const url = m[1].trim();
+  for (const match of content.matchAll(/<link[^>]*\shref\s*=\s*["']([^"']+)["']/gi)) {
+    const url = match[1].trim();
     if (!isAllowedUrl(url)) issues.push(`External <link href> ${JSON.stringify(url)}: inline all styles.`);
   }
-  const cssUrl = /url\(\s*["']?([^"')\s]+)["']?\s*\)/gi;
-  while ((m = cssUrl.exec(content)) !== null) {
-    const url = m[1].trim();
+  for (const match of content.matchAll(/url\(\s*["']?([^"')\s]+)["']?\s*\)/gi)) {
+    const url = match[1].trim();
     if (!isAllowedUrl(url)) issues.push(`CSS url() references external ${JSON.stringify(url)}: use data URIs or inline shapes.`);
   }
   if (/(?:^|[^\w.])fetch\s*\(/i.test(content)) issues.push('HTML calls fetch(): games must not make network requests.');
@@ -162,7 +157,7 @@ function validateHtmlGame(path: string, content: string, issues: string[]) {
   if (!hasInput) issues.push('Game must have at least one input handler (click, pointerdown, touchstart, or keydown).');
 }
 
-function validateJsGame(path: string, content: string, issues: string[]) {
+function validateJsGame(content: string, issues: string[]) {
   const requireCalls = [...content.matchAll(/(?:^|[^\w.])require\s*\(\s*["']([^"']+)["']\s*\)/g)];
   for (const match of requireCalls) {
     const mod = match[1];
@@ -206,9 +201,9 @@ export async function validateGameFile(path: string): Promise<{ valid: boolean; 
     return { valid: false, issues };
   }
   if (path.endsWith('.html')) {
-    validateHtmlGame(path, content, issues);
+    validateHtmlGame(content, issues);
   } else if (path.endsWith('.js')) {
-    validateJsGame(path, content, issues);
+    validateJsGame(content, issues);
   } else {
     issues.push('File must end in .html or .js.');
   }
