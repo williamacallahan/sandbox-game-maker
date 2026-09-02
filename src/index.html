@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gamegram</title>
+<style>
+  :root {
+    --border: #dbdbdb;
+    --text: #262626;
+    --muted: #8e8e8e;
+    --bg: #fafafa;
+    --grad: linear-gradient(45deg, #feda75, #fa7e1e, #d62976, #962fbf, #4f5bd5);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+  .topbar { position: sticky; top: 0; z-index: 10; background: #fff; border-bottom: 1px solid var(--border); }
+  .topbar-inner { max-width: 470px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 8px; }
+  .logo { font-family: "Snell Roundhand", "Segoe Script", cursive; font-size: 26px; font-weight: 600; }
+
+  main { max-width: 470px; margin: 0 auto; padding: 16px 0 64px; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 12px; margin: 0 8px 20px; overflow: hidden; }
+
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; padding: 2px; background: var(--grad); flex: none; }
+  .avatar span { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; background: #fff; font-size: 16px; }
+  .who { min-width: 0; }
+  .who b { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who small { color: var(--muted); font-size: 11px; }
+
+  /* composer */
+  .composer label { display: block; padding: 0 12px; margin: 8px 0 4px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .composer textarea { display: block; width: calc(100% - 24px); margin: 0 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px/1.5 ui-monospace, Menlo, monospace; color: var(--text); resize: vertical; }
+  .composer textarea:focus { outline: none; border-color: #a8a8a8; background: #fff; }
+  #prompt { height: 64px; font: 14px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+  #system { height: 150px; }
+  details { margin-top: 4px; }
+  details summary { padding: 4px 12px; font-size: 12px; color: var(--muted); cursor: pointer; user-select: none; }
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 12px 0; }
+  .settings label { display: block; padding: 0; margin: 0 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  .settings .wide { grid-column: 1 / -1; }
+  .settings input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px/1.4 ui-monospace, Menlo, monospace; color: var(--text); }
+  .settings input:focus { outline: none; border-color: #a8a8a8; background: #fff; }
+  .settings select { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font: 13px/1.4 ui-monospace, Menlo, monospace; color: var(--text); }
+  .stream .think { color: #8e8e8e; font-style: italic; }
+  .chips { display: flex; gap: 6px; padding: 6px 12px 0; }
+  .chip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
+  .chip.on { border-color: transparent; background: var(--grad); color: #fff; font-weight: 600; }
+  .composer-foot { display: flex; justify-content: flex-end; padding: 12px; }
+  #post-btn { border: 0; border-radius: 8px; padding: 8px 22px; background: var(--grad); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
+  #post-btn:disabled { opacity: .4; cursor: default; }
+
+  /* pending / streaming */
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: #d62976; border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .stream { margin: 0 12px 12px; padding: 10px; max-height: 72px; overflow-y: auto; background: #111; color: #9fe8a9; border-radius: 8px; font: 11px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: break-word; transition: max-height .15s ease; }
+  .stream.expanded { max-height: 60vh; }
+  .expand-btn { margin-left: auto; border: 1px solid var(--border); background: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; color: var(--muted); cursor: pointer; flex: none; }
+  .expand-btn:hover { color: var(--text); }
+
+  /* per-post details */
+  .detail-panel { border-top: 1px solid var(--border); padding: 10px 12px; background: var(--bg); font-size: 12px; }
+  .detail-rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+  .detail-rows span { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .04em; align-self: center; }
+  .detail-sys { margin: 8px 0 0; padding: 8px; max-height: 140px; overflow-y: auto; background: #111; color: #e8e8e8; border-radius: 6px; font: 10px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: break-word; }
+  .stream .tool { color: #7ab8ff; }
+  .stream:empty { display: none; }
+
+  /* posts */
+  .media { position: relative; aspect-ratio: 1 / 1; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #000; }
+  .media iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+  .media pre { margin: 0; width: 100%; height: 100%; overflow: auto; padding: 14px; background: #111; color: #e8e8e8; font: 11px/1.5 ui-monospace, Menlo, monospace; }
+  .actions { display: flex; gap: 14px; padding: 8px 12px 0; }
+  .actions button, .actions a { border: 0; background: none; padding: 0; cursor: pointer; color: var(--text); display: flex; }
+  .actions svg { width: 24px; height: 24px; }
+  .actions .liked svg { fill: #ed4956; stroke: #ed4956; }
+  .caption { padding: 6px 12px 12px; font-size: 13px; }
+  .caption b { margin-right: 6px; }
+  .caption .model { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .error { margin: 0 12px 12px; padding: 10px; border-radius: 8px; background: #fdecec; color: #c62828; font-size: 12px; }
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner"><span class="logo">gamegram</span></div></header>
+
+<main>
+  <section class="card composer">
+    <div class="card-head">
+      <div class="avatar"><span>🎮</span></div>
+      <div class="who"><b>you</b><small>share a creation</small></div>
+    </div>
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" placeholder="a snake game with wrap-around walls"></textarea>
+    <details>
+      <summary>System prompt &amp; settings</summary>
+      <div class="chips">
+        <button class="chip on" data-mode="game" type="button">Game</button>
+        <button class="chip" data-mode="create" type="button">Create</button>
+      </div>
+      <label for="system">System prompt</label>
+      <textarea id="system"></textarea>
+      <div class="settings">
+        <div class="wide"><label for="model">Model</label><input id="model" list="model-list" placeholder="type to search models…"><datalist id="model-list"></datalist></div>
+        <div><label for="maxToolCalls">Max tool calls</label><input id="maxToolCalls" type="number" min="1" step="1"></div>
+        <div><label for="maxCost">Max cost (USD)</label><input id="maxCost" type="number" min="0.05" step="0.05"></div>
+        <div class="wide"><label for="maxContextTokens">Max context tokens</label><input id="maxContextTokens" type="number" min="1000" step="1000"></div>
+        <div><label for="maxOutputTokens">Max output tokens</label><input id="maxOutputTokens" type="number" min="1" step="1" placeholder="model default"></div>
+        <div><label for="maxReasoningTokens">Max reasoning tokens</label><input id="maxReasoningTokens" type="number" min="1" step="1" placeholder="model default"></div>
+        <div><label for="reasoningEffort">Reasoning</label><select id="reasoningEffort"><option value="">model default</option></select></div>
+        <div><label for="filename">Filename</label><input id="filename" placeholder="auto — e.g. snake.html" pattern="[a-z0-9][a-z0-9-]*\.(html|js)"></div>
+      </div>
+    </details>
+    <div class="composer-foot"><button id="post-btn" disabled>Post</button></div>
+  </section>
+
+  <div id="pending"></div>
+  <div id="feed"><p class="empty">loading…</p></div>
+</main>
+
+<script type="module">
+const $ = (s, el = document) => el.querySelector(s);
+const promptEl = $('#prompt'), systemEl = $('#system'), postBtn = $('#post-btn');
+let cfg = null;
+
+const HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>';
+const OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+
+function timeAgo(ts) {
+  const s = Math.max(1, (Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  return Math.floor(s / 86400) + 'd';
+}
+
+function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+
+// One-line run summary from a done event's stats.
+function statsLine(t) {
+  const parts = [
+    t.totalTokens + ' tokens (' + t.reasoningTokens + ' reasoning)',
+    t.toolCalls + ' tool calls',
+  ];
+  if (t.tokensPerSec) parts.push(t.tokensPerSec + ' tok/s');
+  if (t.ttftMs) parts.push('ttft ' + Math.round(t.ttftMs) + 'ms');
+  parts.push((t.durationMs / 1000).toFixed(1) + 's');
+  if (t.provider) parts.push('via ' + t.provider);
+  return parts.join(' · ');
+}
+
+function detailsPanel(p) {
+  if (!p.settings) return '<div class="detail-rows"><span>metadata</span><b>none recorded for this file</b></div>';
+  const s = p.settings;
+  const t = p.stats;
+  const rows = [
+    ['model', s.model],
+    ['reasoning', s.reasoningEffort ?? 'model default'],
+    ['max tool calls', s.maxToolCalls],
+    ['max context tokens', s.maxContextTokens ?? s.maxContextChars],
+    ...(s.maxOutputTokens ? [['max output tokens', s.maxOutputTokens]] : []),
+    ...(s.maxReasoningTokens ? [['max reasoning tokens', s.maxReasoningTokens]] : []),
+    ['max cost', '$' + s.maxCost],
+    ...(t ? [
+      ['provider', t.provider ?? 'unknown'],
+      ['tokens/sec', t.tokensPerSec ?? 'unknown'],
+      ['time to first token', t.ttftMs != null ? Math.round(t.ttftMs) + 'ms' : 'unknown'],
+      ['total tokens', t.totalTokens],
+      ['reasoning tokens', t.reasoningTokens],
+      ['tool calls', t.toolCalls],
+      ['elapsed', (t.durationMs / 1000).toFixed(1) + 's'],
+      ...(t.cost != null ? [['cost', '$' + t.cost.toFixed(4)]] : []),
+    ] : []),
+  ].map(([k, v]) => '<span>' + k + '</span><b>' + esc(String(v)) + '</b>').join('');
+  return '<div class="detail-rows">' + rows + '</div>' +
+    '<pre class="detail-sys">' + esc(s.systemPrompt) + '</pre>';
+}
+
+function postCard(p) {
+  const card = document.createElement('article');
+  card.className = 'card';
+  card.dataset.file = p.file;
+  const name = p.file;
+  const isJs = p.file.endsWith('.js');
+  const media = isJs
+    ? '<div class="media"><pre data-src="/games/' + p.file + '">loading…</pre></div>'
+    : '<div class="media"><iframe src="/games/' + p.file + '" sandbox="allow-scripts allow-pointer-lock" loading="lazy" title="' + esc(name) + '"></iframe></div>';
+  const terminalSuffix = isJs ? ' · terminal game — run: bun games/' + esc(p.file) : '';
+  const modelTag = p.model ? '<span class="model">' + esc(p.model) + terminalSuffix + '</span>' : '';
+  card.innerHTML =
+    '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
+    '<div class="who"><b>' + esc(name) + '</b><small>' + timeAgo(p.ts) + '</small></div>' +
+    '<button class="expand-btn details-btn" type="button">Details</button></div>' +
+    '<div class="detail-panel" hidden>' + detailsPanel(p) + '</div>' +
+    media +
+    '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
+    '<a href="/games/' + p.file + '" target="_blank" title="open full size">' + OPEN + '</a></div>' +
+    '<div class="caption"><b>' + esc(name) + '</b>' + esc(p.prompt) + modelTag + '</div>';
+  $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
+  $('.details-btn', card).addEventListener('click', () => {
+    const panel = $('.detail-panel', card);
+    panel.hidden = !panel.hidden;
+  });
+  const pre = $('pre[data-src]', card);
+  if (pre) fetch(pre.dataset.src).then((r) => r.text()).then((t) => { pre.textContent = t; });
+  return card;
+}
+
+async function loadFeed() {
+  const posts = await fetch('/api/feed').then((r) => r.json());
+  const feed = $('#feed');
+  feed.innerHTML = '';
+  if (!posts.length) { feed.innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
+  for (const p of posts) feed.append(postCard(p));
+}
+
+// Live-render a just-written file inside the pending card, straight from the
+// save_game args (full content streams through the event — no server fetch).
+function showPreview(args) {
+  let media = $('#pending .media');
+  if (!media) {
+    media = document.createElement('div');
+    media.className = 'media';
+    $('#pending .card').insertBefore(media, $('#stream'));
+  }
+  if ((args.filename ?? '').endsWith('.js')) {
+    media.innerHTML = '<pre></pre>';
+    $('pre', media).textContent = args.content;
+  } else {
+    media.innerHTML = '<iframe sandbox="allow-scripts" title="preview"></iframe>';
+    $('iframe', media).srcdoc = args.content;
+  }
+  $('#pending .who b').textContent = args.filename ?? 'preview';
+}
+
+function handleGenerationEvent(e, state, log, status) {
+  if (e.type === 'text') {
+    log(e.delta);
+    status('writing response…');
+  } else if (e.type === 'reasoning') {
+    state.reasoningChars += e.delta.length;
+    log(e.delta, 'think');
+    status('thinking… ~' + Math.ceil(state.reasoningChars / 4) + ' reasoning tokens');
+  } else if (e.type === 'tool_call') {
+    state.toolCalls++;
+    log('\n[' + e.name + '] ' + (e.args.filename ?? e.args.path ?? '') + '\n', 'tool');
+    status('tool call ' + state.toolCalls + ': ' + e.name);
+    if (e.name === 'save_game' && typeof e.args.content === 'string') showPreview(e.args);
+  } else if (e.type === 'done') {
+    status('done · ' + statsLine(e.stats));
+  } else if (e.type === 'post') {
+    state.finishedPost = e.post;
+  } else if (e.type === 'error') {
+    throw new Error(e.message);
+  }
+}
+
+async function readGeneration(res, state, log, status) {
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (line.trim()) handleGenerationEvent(JSON.parse(line), state, log, status);
+    }
+  }
+}
+
+async function finishGeneration(pending, finishedPost) {
+  if (finishedPost?.file) {
+    pending.innerHTML = '';
+    $('#feed .empty')?.remove();
+    // Regenerating an existing filename replaces its card instead of duplicating it.
+    $('#feed article[data-file="' + CSS.escape(finishedPost.file) + '"]')?.remove();
+    $('#feed').prepend(postCard(finishedPost));
+  } else if (finishedPost) {
+    // Run ended without a saved file: keep the stream visible so the
+    // model's final text explains what happened.
+    $('.spinner', pending)?.remove();
+    $('#pending .who b').textContent = 'finished without saving a file';
+  } else {
+    pending.innerHTML = '';
+    await loadFeed();
+  }
+}
+
+async function generate() {
+  postBtn.disabled = true;
+  const pending = $('#pending');
+  pending.innerHTML =
+    '<section class="card"><div class="card-head"><div class="spinner"></div>' +
+    '<div class="who"><b>generating…</b><small>' + esc(promptEl.value.trim()) + '</small></div>' +
+    '<button class="expand-btn" type="button">expand</button></div>' +
+    '<div class="stream" id="stream"></div></section>';
+  const stream = $('#stream');
+  const expandBtn = $('.expand-btn', pending);
+  expandBtn.addEventListener('click', () => {
+    expandBtn.textContent = stream.classList.toggle('expanded') ? 'collapse' : 'expand';
+    stream.scrollTop = stream.scrollHeight;
+  });
+  const status = (t) => { $('.who small', pending).textContent = t; };
+  const log = (t, cls) => {
+    const s = document.createElement('span');
+    if (cls) s.className = cls;
+    s.textContent = t;
+    stream.append(s);
+    stream.scrollTop = stream.scrollHeight;
+  };
+  const state = { finishedPost: null, reasoningChars: 0, toolCalls: 0 };
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        prompt: promptEl.value.trim(),
+        systemPrompt: systemEl.value,
+        model: $('#model').value,
+        maxToolCalls: $('#maxToolCalls').value,
+        maxContextTokens: $('#maxContextTokens').value,
+        maxOutputTokens: $('#maxOutputTokens').value,
+        maxReasoningTokens: $('#maxReasoningTokens').value,
+        maxCost: $('#maxCost').value,
+        reasoningEffort: $('#reasoningEffort').value,
+        filename: $('#filename').value.trim(),
+      }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+    await readGeneration(res, state, log, status);
+    await finishGeneration(pending, state.finishedPost);
+  } catch (err) {
+    stream.insertAdjacentHTML('afterend', '<div class="error">' + esc(err.message) + '</div>');
+    $('.spinner', pending)?.remove();
+  } finally {
+    postBtn.disabled = !promptEl.value.trim();
+  }
+}
+
+document.querySelectorAll('.chip').forEach((chip) =>
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach((c) => c.classList.remove('on'));
+    chip.classList.add('on');
+    systemEl.value = chip.dataset.mode === 'create' ? cfg.createSystemPrompt : cfg.systemPrompt;
+  }),
+);
+promptEl.addEventListener('input', () => { postBtn.disabled = !promptEl.value.trim(); });
+postBtn.addEventListener('click', generate);
+promptEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !postBtn.disabled) generate();
+});
+
+// Per-model reasoning metadata from /api/models: id → { supported_efforts, default_effort, ... }.
+const modelReasoning = new Map();
+// Rebuild the reasoning select from the chosen model's supported_efforts;
+// unknown models (or a failed model list) fall back to the full static list.
+function syncEfforts() {
+  const sel = $('#reasoningEffort');
+  const r = modelReasoning.get($('#model').value.trim());
+  const efforts = r?.supported_efforts
+    ? cfg.reasoningEfforts.filter((e) => r.supported_efforts.includes(e))
+    : cfg.reasoningEfforts;
+  const prev = sel.value;
+  sel.innerHTML =
+    '<option value="">model default' + (r?.default_effort ? ' (' + esc(r.default_effort) + ')' : '') + '</option>' +
+    efforts.map((e) => '<option value="' + e + '">' + e + '</option>').join('');
+  sel.value = efforts.includes(prev) ? prev : '';
+}
+$('#model').addEventListener('input', () => { if (cfg) syncEfforts(); });
+
+// The field works as free text when the optional model list is unavailable.
+try {
+  const models = await fetch('/api/models');
+  const m = await models.json();
+  $('#model-list').innerHTML = m.data
+    .map((x) => '<option value="' + esc(x.id) + '">' + esc(x.name ?? '') + '</option>')
+    .join('');
+  for (const x of m.data) if (x.reasoning) modelReasoning.set(x.id, x.reasoning);
+  if (cfg) syncEfforts();
+} catch {}
+
+const feedPromise = loadFeed();
+cfg = await fetch('/api/config').then((r) => r.json());
+systemEl.value = cfg.systemPrompt;
+promptEl.value = cfg.defaultPrompt;
+for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxCost']) $('#' + key).value = cfg[key];
+syncEfforts();
+postBtn.disabled = false;
+await feedPromise;
+</script>
+</body>
+</html>
