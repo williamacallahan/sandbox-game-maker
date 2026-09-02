@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.example
+*.md
+dogfood-output
+test
+.github
+.vscode
+.claude
+.ori
