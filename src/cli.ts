@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { parseArgs } from 'node:util';
-import { CREATE_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, type AgentConfig } from './config.js';
+import { CREATE_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
 import { runAgent, type AgentEvent } from './agent.js';
 
 // Pre-scan argv for output mode so the catch below can format errors
@@ -65,7 +65,7 @@ Options:
   -j, --json                   Output NDJSON event stream instead of text
   -q, --quiet                  No output; exit 0 on success, 1 on error
   -m, --model <model>          Override the model (default: qwen/qwen3.8-flash)
-  -r, --reasoning <effort>     Reasoning effort: max|xhigh|high|medium|low|minimal|none
+  -r, --reasoning <effort>     Reasoning effort: ${REASONING_EFFORTS.join('|')}
                                (default: unset, model decides)
   -o, --out <dir>              Output directory for saved games (default: games)
       --max-tool-calls <n>       Cap total tool calls (default: 8)

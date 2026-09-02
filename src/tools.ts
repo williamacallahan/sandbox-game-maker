@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import type { AgentConfig } from './config.js';
 
 /** ~4 characters per token; real per-call usage arrives from the API only after the fact. */
-const CHARS_PER_TOKEN = 4;
-export function estimateTokens(chars: number): number {
+export const CHARS_PER_TOKEN = 4;
+function estimateTokens(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN);
 }
 

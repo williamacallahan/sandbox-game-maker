@@ -14,7 +14,7 @@ export type AgentEvent =
   | { type: 'tool_result'; name: string; callId: string; output: string }
   | { type: 'reasoning'; delta: string }
   | { type: 'turn_end' }
-  | { type: 'done'; usage: { inputTokens?: number; outputTokens?: number; totalTokens?: number } | null | undefined; durationMs: number; stats: RunStats };
+  | { type: 'done'; durationMs: number; stats: RunStats };
 
 /** Per-run generation metadata, shown by the UI and CLI after a run. */
 export type RunStats = {
@@ -25,6 +25,8 @@ export type RunStats = {
   /** Time to first streamed text/reasoning delta in ms; null when not streaming. */
   ttftMs: number | null;
   /** Run-wide totals aggregated across every model call. */
+  inputTokens: number;
+  outputTokens: number;
   totalTokens: number;
   reasoningTokens: number;
   toolCalls: number;
@@ -62,8 +64,8 @@ export async function runAgent(
     {
       model: config.model,
       instructions: config.systemPrompt,
-      // Route to the lowest-latency provider for the model (no load balancing).
-      provider: { sort: 'latency' },
+      // Route to the highest-throughput provider for the model (no load balancing).
+      provider: { sort: 'throughput' },
       ...(config.maxOutputTokens && { maxOutputTokens: config.maxOutputTokens }),
       // loadConfig rejects effort + maxReasoningTokens together, so at most one is set here.
       ...(config.reasoningEffort && { reasoning: { effort: config.reasoningEffort } }),
@@ -156,6 +158,8 @@ export async function runAgent(
         ? Math.round((gen.nativeTokensCompletion / gen.generationTime) * 1000)
         : null,
       ttftMs: firstTokenAt ? firstTokenAt - startedAt : null,
+      inputTokens: totals.inputTokens,
+      outputTokens: totals.outputTokens,
       totalTokens: totals.totalTokens,
       reasoningTokens: totals.reasoningTokens,
       toolCalls: budget.callCount,
@@ -163,8 +167,8 @@ export async function runAgent(
       cost: totals.cost ?? null,
     };
     const text = accumulatedText || (response.outputText ?? '');
-    options?.onEvent?.({ type: 'done', usage: totals, durationMs, stats });
-    return { text, usage: totals, output: response.output, durationMs, stats };
+    options?.onEvent?.({ type: 'done', durationMs, stats });
+    return { text, output: response.output, durationMs, stats };
   } finally {
     options?.signal?.removeEventListener('abort', onAbort);
   }
