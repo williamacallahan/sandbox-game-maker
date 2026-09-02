@@ -98,10 +98,21 @@ export async function runAgent(
 
   try {
     if (options?.onEvent) {
-      // Run two streams concurrently: getTextStream for text deltas (no
-      // bookkeeping required) and getItemsStream filtered to tool events.
-      // The SDK's ReusableReadableStream allows concurrent consumption.
+      // Run three streams concurrently: getTextStream / getReasoningStream
+      // for true deltas and getItemsStream filtered to tool events. The
+      // SDK's ReusableReadableStream allows concurrent consumption.
+      // getItemsStream must NOT be used for reasoning text: it yields items
+      // with cumulative updates (each event carries the whole summary so
+      // far), which double-counts and re-prints reasoning downstream.
       const callNames = new Map<string, string>();
+
+      const streamReasoning = async () => {
+        for await (const delta of result.getReasoningStream()) {
+          if (options?.signal?.aborted) break;
+          firstTokenAt ??= Date.now();
+          options.onEvent!({ type: 'reasoning', delta });
+        }
+      };
 
       const streamText = async () => {
         for await (const delta of result.getTextStream()) {
@@ -132,17 +143,11 @@ export async function runAgent(
             // Signal a turn boundary; consumers (e.g. CLI text mode) can
             // render a separator. Keeps presentation out of agent.ts.
             options.onEvent!({ type: 'turn_end' });
-          } else if (item.type === 'reasoning') {
-            const text = item.summary?.map((s: { text: string }) => s.text).join('') ?? '';
-            if (text) {
-              firstTokenAt ??= Date.now();
-              options.onEvent!({ type: 'reasoning', delta: text });
-            }
           }
         }
       };
 
-      await Promise.all([streamText(), streamTools()]);
+      await Promise.all([streamText(), streamTools(), streamReasoning()]);
     }
 
     const response = await result.getResponse();
