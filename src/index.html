@@ -215,7 +215,7 @@ function postCard(p) {
   const isJs = p.file.endsWith('.js');
   // .js terminal games play in the page via the server's ?play xterm runner.
   const src = '/games/' + p.file + (isJs ? '?play=1' : '');
-  const media = '<div class="media"><iframe src="' + src + '" sandbox="allow-scripts allow-pointer-lock" loading="lazy" title="' + esc(name) + '"></iframe></div>';
+  const media = '<div class="media"><iframe src="' + src + '" sandbox="allow-scripts" loading="lazy" tabindex="0" title="' + esc(name) + '"></iframe></div>';
   const terminalSuffix = isJs ? ' · terminal game' : '';
   const modelTag = p.model ? '<span class="model">' + esc(p.model) + terminalSuffix + '</span>' : '';
   card.innerHTML =
@@ -230,6 +230,10 @@ function postCard(p) {
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
     '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a></div>' +
     '<div class="caption"><b>' + esc(name) + '</b>' + esc(p.prompt) + modelTag + '</div>';
+  const iframe = $('iframe', card);
+  for (const ev of ['mouseenter', 'click']) {
+    iframe.addEventListener(ev, () => { try { iframe.contentWindow?.focus(); } catch {} });
+  }
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   for (const [buttonSelector, panelSelector] of [
     ['.how-btn', '.how-panel'],
@@ -269,8 +273,10 @@ function showPreview(args) {
     media.innerHTML = '<pre></pre>';
     $('pre', media).textContent = args.content;
   } else {
-    media.innerHTML = '<iframe sandbox="allow-scripts" title="preview"></iframe>';
-    $('iframe', media).srcdoc = args.content;
+    media.innerHTML = '<iframe sandbox="allow-scripts" tabindex="0" title="preview"></iframe>';
+    const iframe = $('iframe', media);
+    iframe.srcdoc = args.content;
+    iframe.addEventListener('load', () => { try { iframe.contentWindow?.focus(); } catch {} });
   }
   $('#pending .who b').textContent = args.filename ?? 'preview';
 }

@@ -1,6 +1,4 @@
 node_modules/
-# generated game output + feed metadata (mutates on every generation)
-games/
 .vscode/
 .env
 dogfood-output/
