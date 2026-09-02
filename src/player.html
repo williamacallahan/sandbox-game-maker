@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" integrity="sha384-tStR1zLfWgsiXCF3IgfB3lBa8KmBe/lG287CL9WCeKgQYcp1bjb4/+mwN6oti4Co" crossorigin="anonymous">
+<style>
+  html, body { margin: 0; height: 100%; background: #111; overflow: hidden; }
+  #term { transform-origin: 0 0; }
+</style>
+</head>
+<body>
+<div id="term"></div>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js" integrity="sha384-J4qzUjBl1FxyLsl/kQPQIOeINsmp17OHYXDOMpMxlKX53ZfYsL+aWHpgArvOuof9" crossorigin="anonymous"></script>
+<script>
+const SRC = __GAME__;
+
+// Terminal games draw up to ~96x40 frames; open a fixed oversized grid and
+// scale the whole terminal to fit the iframe instead of reflowing the game.
+const COLS = 110, ROWS = 44;
+const el = document.getElementById('term');
+const term = new Terminal({ cols: COLS, rows: ROWS, convertEol: true, scrollback: 0, fontSize: 14, theme: { background: '#111111' } });
+term.open(el);
+function fit() {
+  const s = Math.min(innerWidth / el.offsetWidth, innerHeight / el.offsetHeight);
+  el.style.transform = 'scale(' + s + ')';
+}
+addEventListener('resize', fit);
+requestAnimationFrame(fit);
+
+// Minimal Node shims: enough for process.stdout/stdin raw-mode terminal games
+// and require("readline") keypress events. Games run via new Function below.
+const EXIT = { exit: true };
+const stdinListeners = { data: [], keypress: [] };
+let sigint = null;
+const proc = {
+  stdout: { write(s) { term.write(s); return true; }, columns: COLS, rows: ROWS, isTTY: true },
+  stderr: { write(s) { term.write(s); return true; }, isTTY: true },
+  stdin: {
+    isTTY: true,
+    setRawMode() { return this; }, resume() { return this; }, pause() { return this; }, setEncoding() { return this; },
+    on(ev, fn) {
+      const listeners = stdinListeners[ev] ?? [];
+      stdinListeners[ev] = listeners;
+      listeners.push(fn);
+      return this;
+    },
+    once(ev, fn) { return this.on(ev, fn); },
+    removeListener() { return this; },
+    off() { return this; },
+  },
+  on(ev, fn) {
+    if (ev === 'SIGINT') sigint = fn;
+    return proc;
+  },
+  exit() {
+    // ponytail: clear every timer id to freeze the game loop — the sandbox's "process exit"
+    let id = setTimeout(() => {}, 0);
+    while (id--) { clearTimeout(id); clearInterval(id); }
+    term.write('\x1b[0m\x1b[?25h');
+    throw EXIT;
+  },
+  env: {},
+  argv: ['bun', 'game'],
+};
+const NAMES = { '\x1b[A': 'up', '\x1b[B': 'down', '\x1b[C': 'right', '\x1b[D': 'left', ' ': 'space', '\r': 'return', '\t': 'tab', '\x7f': 'backspace', '\x1b': 'escape' };
+term.onData((s) => {
+  try {
+    for (const fn of stdinListeners.data) fn(s);
+    const code = s.length === 1 ? s.codePointAt(0) : 0;
+    const ctrl = code > 0 && code < 27 && s !== '\r' && s !== '\t';
+    let name = NAMES[s] ?? (s.length === 1 ? s.toLowerCase() : '');
+    if (ctrl) name = String.fromCodePoint(code + 96);
+    for (const fn of stdinListeners.keypress) fn(s, { name, ctrl, meta: false, shift: false, sequence: s });
+    if (s === '\x03' && sigint) sigint();
+  } catch (e) { if (e !== EXIT) throw e; }
+});
+const readline = {
+  emitKeypressEvents() {},
+  createInterface: () => ({ question() {}, close() {}, on() { return this; } }),
+};
+const requireShim = (m) => (m.replace('node:', '') === 'readline' ? readline : {});
+const consoleShim = { ...console, log: (...a) => term.writeln(a.map(String).join(' ')), error: (...a) => term.writeln(a.map(String).join(' ')) };
+
+try {
+  const runGame = new Function('require', 'process', 'console', 'module', 'exports', SRC); // NOSONAR -- server CSP sandboxes generated code in an opaque origin with network access denied.
+  runGame(requireShim, proc, consoleShim, { exports: {} }, {});
+} catch (e) {
+  if (e !== EXIT) term.writeln('\r\n\x1b[31m' + (e && e.stack || e) + '\x1b[0m');
+}
+term.focus();
+</script>
+</body>
+</html>
