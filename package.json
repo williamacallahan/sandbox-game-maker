@@ -1,0 +1,25 @@
+{
+  "name": "game-maker",
+  "type": "module",
+  "bin": {
+    "game-maker": "src/cli.ts"
+  },
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "dev": "bun --watch src/cli.ts",
+    "dev:openrouter": "doppler run --no-check-version --silent -p personal -c dev --no-fallback --forward-signals=true --only-secrets OPENROUTER_API_KEY -- bun --watch src/cli.ts",
+    "ui": "bun run src/server.ts",
+    "ui:openrouter": "doppler run --no-check-version --silent -p personal -c dev --no-fallback --forward-signals=true --only-secrets OPENROUTER_API_KEY -- bun --watch src/server.ts",
+    "build": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@openrouter/agent": "latest",
+    "@openrouter/sdk": "^0.13.7",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "latest"
+  }
+}
