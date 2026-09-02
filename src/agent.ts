@@ -14,8 +14,20 @@ export type AgentEvent =
   | { type: 'tool_call'; name: string; callId: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; callId: string; output: string }
   | { type: 'reasoning'; delta: string }
+  | { type: 'metadata'; responseId: string; turnNumber: number; model: string; usage: TurnUsage }
   | { type: 'turn_end' }
   | { type: 'done'; durationMs: number; stats: RunStats };
+
+export type TurnUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  reasoningTokens?: number;
+  cachedTokens?: number;
+  cost?: number;
+  /** Upstream provider cost; only present for BYOK requests. */
+  upstreamCost?: number;
+};
 
 /** Per-run generation metadata, shown by the UI and CLI after a run. */
 export type RunStats = {
@@ -33,6 +45,8 @@ export type RunStats = {
   toolCalls: number;
   durationMs: number;
   cost: number | null;
+  /** Aggregate upstream provider cost; only present for BYOK requests. */
+  upstreamCost: number | null;
 };
 
 /**
@@ -92,6 +106,31 @@ export async function runAgent(
       // Steps also bound tool calls loosely (each tool-bearing step has >=1 call);
       // the Budget in tools.ts enforces the exact per-call and context caps.
       stopWhen: [stepCountIs(config.maxToolCalls + 2), maxCost(config.maxCost)],
+      // Emit per-turn usage metadata as it is reported for each model response.
+      onTurnEnd: (context, response) => {
+        const u = response.usage;
+        const upstream = u?.costDetails?.upstreamInferenceCost;
+        if (upstream != null) {
+          upstreamCost = (upstreamCost ?? 0) + upstream;
+        }
+        if (u && options?.onEvent) {
+          options.onEvent({
+            type: 'metadata',
+            responseId: response.id,
+            turnNumber: context.numberOfTurns,
+            model: response.model,
+            usage: {
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens,
+              totalTokens: u.totalTokens,
+              reasoningTokens: u.outputTokensDetails?.reasoningTokens,
+              cachedTokens: u.inputTokensDetails?.cachedTokens,
+              cost: u.cost ?? undefined,
+              upstreamCost: upstream ?? undefined,
+            },
+          });
+        }
+      },
     },
     // SDK retries the individual failing HTTP call with backoff (default covers
     // 5XX only); adding 429 here is safe — a per-call retry never re-executes
@@ -112,6 +151,7 @@ export async function runAgent(
   // text deltas here as a source of truth for the final text.
   let accumulatedText = '';
   let firstTokenAt: number | null = null;
+  let upstreamCost: number | null = null;
 
   try {
     if (options?.onEvent) {
@@ -195,6 +235,7 @@ export async function runAgent(
       toolCalls: budget.callCount,
       durationMs,
       cost: totals.cost ?? null,
+      upstreamCost: upstreamCost ?? null,
     };
     const text = accumulatedText || (response.outputText ?? '');
     options?.onEvent?.({ type: 'done', durationMs, stats });
