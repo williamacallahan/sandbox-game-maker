@@ -1,36 +1,13 @@
 #!/usr/bin/env bun
-import { basename, join } from 'node:path';
-import { mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { CREATE_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
-import { runAgent, type RunStats } from './agent.js';
-import { CHARS_PER_TOKEN, GAME_FILENAME } from './tools.js';
+import { runAgent } from './agent.js';
+import { CHARS_PER_TOKEN } from './tools.js';
+import { createGameStorage, GAME_FILENAME } from './storage.js';
 
 const defaults = loadConfig({}, { skipApiKey: true });
-const FEED_PATH = join(defaults.outDir, 'feed.json');
+const storage = createGameStorage(defaults.outDir);
 const GAME_URL = /^\/games\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
-
-type Post = {
-  file: string | null;
-  prompt: string;
-  model: string;
-  ts: number;
-  instructions?: string;
-  /** The effective generation settings, shown by the feed's Details toggle. */
-  settings?: Pick<
-    AgentConfig,
-    'model' | 'reasoningEffort' | 'maxToolCalls' | 'maxContextTokens' | 'maxOutputTokens' | 'maxReasoningTokens' | 'maxCost' | 'systemPrompt'
-  >;
-  /** Run metadata (provider, tokens/sec, ttft, totals) from the done event. */
-  stats?: RunStats | null;
-};
-
-function readFeed(): Post[] {
-  try {
-    return JSON.parse(readFileSync(FEED_PATH, 'utf-8'));
-  } catch {
-    return [];
-  }
-}
 
 // ponytail: cached for the server's lifetime; restart to refresh the model list.
 let modelsCache: string | null = null;
@@ -40,6 +17,14 @@ const PLAYER_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self'
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isMissing(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'NoSuchKey');
 }
 
 const server = Bun.serve({
@@ -76,23 +61,22 @@ const server = Bun.serve({
     }
 
     if (url.pathname === '/api/feed') {
-      // The directory is the source of truth; feed.json only decorates files
-      // with the prompt/model that produced them.
-      const meta = new Map(readFeed().map((p) => [p.file, p]));
-      let posts: Post[] = [];
       try {
-        posts = readdirSync(defaults.outDir)
-          .filter((f) => GAME_FILENAME.test(f))
-          .map((f) => meta.get(f) ?? { file: f, prompt: '', model: '', ts: statSync(join(defaults.outDir, f)).mtimeMs });
-      } catch {}
-      posts.sort((a, b) => b.ts - a.ts);
-      return json(posts);
+        return json(await storage.list());
+      } catch (error) {
+        return json({ error: errorMessage(error) }, 502);
+      }
     }
 
     const game = GAME_URL.exec(url.pathname);
     if (game) {
-      const file = Bun.file(join(defaults.outDir, game[1]));
-      if (!(await file.exists())) return new Response('not found', { status: 404 });
+      let content: string;
+      try {
+        ({ content } = await storage.read(game[1]));
+      } catch (error) {
+        if (isMissing(error)) return new Response('not found', { status: 404 });
+        return json({ error: errorMessage(error) }, 502);
+      }
       // .js terminal games play in the browser: ?play wraps them in the xterm.js
       // runner and loads the source as a sandboxed external script.
       if (game[2] === 'js' && url.searchParams.has('play')) {
@@ -107,7 +91,7 @@ const server = Bun.serve({
       // Bare .js doubles as the runner's <script src> — a real script MIME is
       // required: the sandboxed page's opaque origin makes the fetch
       // cross-origin, and browsers (ORB) block text/plain scripts there.
-      return new Response(file, {
+      return new Response(content, {
         headers: {
           'content-type': game[2] === 'html' ? 'text/html' : 'text/javascript',
           ...(game[2] === 'js' && { 'access-control-allow-origin': '*' }),
@@ -151,65 +135,17 @@ const server = Bun.serve({
         async start(controller) {
           const enc = new TextEncoder();
           const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + '\n'));
-          // tool_result.output is a display preview truncated to 200 chars, so
-          // take the filename from the untruncated tool_call args and only use
-          // the result's stable success prefix (never cut by end-truncation).
-          let pendingFile: string | null = null;
-          let pendingInstructions: string | null = null;
-          let savedFile: string | null = null;
-          let savedInstructions: string | null = null;
-          let runStats: RunStats | null = null;
           try {
             const fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
-            await runAgent(config, fullPrompt, {
-              onEvent: (e) => {
-                if (e.type === 'tool_call' && e.name === 'save_game' && typeof e.args.filename === 'string') {
-                  pendingFile = e.args.filename;
-                  pendingInstructions = typeof e.args.instructions === 'string' ? e.args.instructions.trim() : null;
-                } else if (e.type === 'tool_result' && e.name === 'save_game') {
-                  if (pendingFile && e.output.startsWith('{"written":true')) {
-                    savedFile = pendingFile;
-                    savedInstructions = pendingInstructions;
-                  }
-                  pendingFile = null;
-                  pendingInstructions = null;
-                } else if (e.type === 'done') {
-                  runStats = e.stats;
-                }
-                send(e);
-              },
+            const { savedPosts } = await runAgent(config, fullPrompt, {
+              storage,
+              wantedFilename: wantedFile ?? undefined,
+              savePrompt: prompt,
+              onEvent: send,
             });
-            // The prompt asks the model to use wantedFile, but the rename is
-            // the guarantee: whatever save_game wrote lands under that name.
-            if (wantedFile && savedFile && basename(savedFile) !== wantedFile) {
-              renameSync(join(defaults.outDir, basename(savedFile)), join(defaults.outDir, wantedFile));
-              savedFile = wantedFile;
-            }
-            const post: Post = {
-              file: savedFile ? basename(savedFile) : null,
-              prompt,
-              model: config.model,
-              ts: Date.now(),
-              instructions: savedInstructions ?? undefined,
-              settings: {
-                model: config.model,
-                reasoningEffort: config.reasoningEffort,
-                maxToolCalls: config.maxToolCalls,
-                maxContextTokens: config.maxContextTokens,
-                maxOutputTokens: config.maxOutputTokens,
-                maxReasoningTokens: config.maxReasoningTokens,
-                maxCost: config.maxCost,
-                systemPrompt: config.systemPrompt,
-              },
-              stats: runStats,
-            };
-            if (post.file) {
-              mkdirSync(defaults.outDir, { recursive: true });
-              writeFileSync(FEED_PATH, JSON.stringify([post, ...readFeed().filter((p) => p.file !== post.file)], null, 2));
-            }
-            send({ type: 'post', post });
-          } catch (err: any) {
-            send({ type: 'error', message: err?.message ?? String(err) });
+            for (const post of savedPosts) send({ type: 'post', post });
+          } catch (error) {
+            send({ type: 'error', message: errorMessage(error) });
           }
           controller.close();
         },

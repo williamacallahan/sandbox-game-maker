@@ -13,6 +13,7 @@ RUN chown bun:bun /app
 USER bun
 COPY --chown=bun:bun --from=builder /app/node_modules ./node_modules
 COPY --chown=bun:bun --from=builder /app/src ./src
+COPY --chown=bun:bun --from=builder /app/scripts ./scripts
 COPY --chown=bun:bun --from=builder /app/games ./games
 COPY --chown=bun:bun --from=builder /app/package.json ./
 COPY --chown=bun:bun --from=builder /app/bun.lock ./

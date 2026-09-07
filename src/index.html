@@ -253,7 +253,9 @@ function postCard(p) {
 }
 
 async function loadFeed() {
-  const posts = await fetch('/api/feed').then((r) => r.json());
+  const response = await fetch('/api/feed');
+  const posts = await response.json();
+  if (!response.ok) throw new Error(posts.error ?? response.statusText);
   const feed = $('#feed');
   feed.innerHTML = '';
   if (!posts.length) { feed.innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
@@ -297,7 +299,7 @@ function handleGenerationEvent(e, state, log, status) {
   } else if (e.type === 'done') {
     status('done · ' + statsLine(e.stats));
   } else if (e.type === 'post') {
-    state.finishedPost = e.post;
+    state.finishedPosts.push(e.post);
   } else if (e.type === 'error') {
     throw new Error(e.message);
   }
@@ -319,21 +321,18 @@ async function readGeneration(res, state, log, status) {
   }
 }
 
-async function finishGeneration(pending, finishedPost) {
-  if (finishedPost?.file) {
+async function finishGeneration(pending, finishedPosts) {
+  if (finishedPosts.length) {
     pending.innerHTML = '';
     $('#feed .empty')?.remove();
-    // Regenerating an existing filename replaces its card instead of duplicating it.
-    $('#feed article[data-file="' + CSS.escape(finishedPost.file) + '"]')?.remove();
-    $('#feed').prepend(postCard(finishedPost));
-  } else if (finishedPost) {
-    // Run ended without a saved file: keep the stream visible so the
-    // model's final text explains what happened.
+    for (const post of finishedPosts) {
+      // Regenerating an existing filename replaces its card instead of duplicating it.
+      $('#feed article[data-file="' + CSS.escape(post.file) + '"]')?.remove();
+      $('#feed').prepend(postCard(post));
+    }
+  } else {
     $('.spinner', pending)?.remove();
     $('#pending .who b').textContent = 'finished without saving a file';
-  } else {
-    pending.innerHTML = '';
-    await loadFeed();
   }
 }
 
@@ -359,7 +358,7 @@ async function generate() {
     stream.append(s);
     stream.scrollTop = stream.scrollHeight;
   };
-  const state = { finishedPost: null, reasoningChars: 0, toolCalls: 0 };
+  const state = { finishedPosts: [], reasoningChars: 0, toolCalls: 0 };
   try {
     const res = await fetch('/api/generate', {
       method: 'POST',
@@ -379,7 +378,7 @@ async function generate() {
     });
     if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
     await readGeneration(res, state, log, status);
-    await finishGeneration(pending, state.finishedPost);
+    await finishGeneration(pending, state.finishedPosts);
   } catch (err) {
     stream.insertAdjacentHTML('afterend', '<div class="error">' + esc(err.message) + '</div>');
     $('.spinner', pending)?.remove();
@@ -430,7 +429,9 @@ try {
   if (cfg) syncEfforts();
 } catch {}
 
-const feedPromise = loadFeed();
+const feedPromise = loadFeed().catch((error) => {
+  $('#feed').innerHTML = '<p class="error">Could not load games: ' + esc(error.message) + '</p>';
+});
 cfg = await fetch('/api/config').then((r) => r.json());
 systemEl.value = cfg.systemPrompt;
 promptEl.value = cfg.defaultPrompt;

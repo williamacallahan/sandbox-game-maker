@@ -1,8 +1,10 @@
 import { tool } from '@openrouter/agent/tool';
 import { z } from 'zod';
-import { mkdirSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import type { AgentConfig } from './config.js';
+import { createGameStorage, GAME_FILENAME, type GameStorage, type Post, type SavePost } from './storage.js';
+
+export { GAME_FILENAME } from './storage.js';
 
 /** ~4 characters per token; real per-call usage arrives from the API only after the fact. */
 export const CHARS_PER_TOKEN = 4;
@@ -60,8 +62,6 @@ export class Budget {
     return result;
   }
 }
-
-export const GAME_FILENAME = /^[a-z0-9][a-z0-9-]*\.(html|js)$/;
 
 function isAllowedUrl(url: string): boolean {
   return url.startsWith('data:') || url === '' || url.startsWith('#');
@@ -192,9 +192,8 @@ function validateJsGame(content: string, issues: string[]) {
   }
 }
 
-/** Check a saved game file for playability and policy issues. */
-export async function validateGameFile(path: string): Promise<{ valid: boolean; issues: string[] }> {
-  const content = await Bun.file(path).text();
+/** Check game content for playability and policy issues. */
+export function validateGameContent(path: string, content: string): { valid: boolean; issues: string[] } {
   const issues: string[] = [];
   if (content.trim().length === 0) {
     issues.push('File is empty.');
@@ -210,27 +209,55 @@ export async function validateGameFile(path: string): Promise<{ valid: boolean; 
   return { valid: issues.length === 0, issues };
 }
 
+/** Check a local fixture file for playability and policy issues. */
+export async function validateGameFile(path: string): Promise<{ valid: boolean; issues: string[] }> {
+  return validateGameContent(path, await Bun.file(path).text());
+}
+
+function gameFilename(path: string, outDir: string): string {
+  const output = resolve(outDir);
+  const candidate = resolve(path);
+  const child = relative(output, candidate);
+  if (!child || child.startsWith('..') || isAbsolute(child) || dirname(child) !== '.' || !GAME_FILENAME.test(child)) {
+    throw new Error(`Game path must name a saved .html or .js file inside ${outDir}/.`);
+  }
+  return child;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export type MakeToolsOptions = {
+  storage?: GameStorage;
+  wantedFilename?: string;
+  saveMetadata?: () => Omit<SavePost, 'instructions'>;
+  onSave?: (post: Post) => void;
+};
+
 /** Tools close over the run's budget, so build them per run. */
-export function makeTools(config: AgentConfig, budget: Budget) {
+export function makeTools(config: AgentConfig, budget: Budget, options: MakeToolsOptions = {}) {
+  const storage = options.storage ?? createGameStorage(config.outDir);
+  const saveMetadata = options.saveMetadata ?? (() => ({ prompt: '', model: config.model, ts: Date.now() }));
   return [
     tool({
       name: 'save_game',
-      description: `Save a finished game file into the output directory (${config.outDir}/). Filename must be lowercase kebab-case ending in .html or .js (no underscores / snake_case). Include concise player instructions for the gallery's How to play panel. Returns the saved path.`,
+      description: `Save a finished game file in the gallery (${config.outDir}/). Filename must be lowercase kebab-case ending in .html or .js (no underscores / snake_case). Include concise player instructions for the gallery's How to play panel. Returns the saved path.`,
       inputSchema: z.object({
         filename: z.string().describe('Lowercase kebab-case filename with no underscores, e.g. "my-game.html" or "guess-number.js"'),
         content: z.string().describe('Complete, self-contained file content'),
         instructions: z.string().min(1).max(500).describe('Concise controls and objective for the player'),
       }),
-      execute: async ({ filename, content }) => {
+      execute: async ({ filename, content, instructions }) => {
         const limit = budget.take();
         if (limit) return { error: limit };
-        if (!GAME_FILENAME.test(filename)) {
+        const target = options.wantedFilename ?? filename;
+        if (!GAME_FILENAME.test(target)) {
           return budget.charge({ error: `Invalid filename ${JSON.stringify(filename)}: must match ${GAME_FILENAME}` });
         }
-        mkdirSync(config.outDir, { recursive: true });
-        const path = join(config.outDir, filename);
-        await Bun.write(path, content);
-        return budget.charge({ written: true, path });
+        const post = await storage.save(target, content, { ...saveMetadata(), instructions });
+        options.onSave?.(post);
+        return budget.charge({ written: true, path: `${config.outDir}/${target}` });
       },
     }),
 
@@ -244,10 +271,12 @@ export function makeTools(config: AgentConfig, budget: Budget) {
         const limit = budget.take();
         if (limit) return { error: limit };
         try {
-          const { valid, issues } = await validateGameFile(path);
+          const filename = gameFilename(path, config.outDir);
+          const game = await storage.read(filename);
+          const { valid, issues } = validateGameContent(filename, game.content);
           return budget.charge({ valid, issues });
-        } catch (err: any) {
-          return budget.charge({ error: err.code === 'ENOENT' ? `File not found: ${path}` : err.message });
+        } catch (error) {
+          return budget.charge({ error: errorMessage(error) });
         }
       },
     }),
@@ -262,22 +291,23 @@ export function makeTools(config: AgentConfig, budget: Budget) {
         const limit = budget.take();
         if (limit) return { error: limit };
         try {
-          const lines = (await Bun.file(path).text()).split('\n');
+          const filename = gameFilename(path, config.outDir);
+          const lines = (await storage.read(filename)).content.split('\n');
           const slice = lines.slice(0, 2000);
           return budget.charge({
             content: slice.join('\n'),
             totalLines: lines.length,
             ...(lines.length > 2000 && { truncated: true }),
           });
-        } catch (err: any) {
-          return budget.charge({ error: err.code === 'ENOENT' ? `File not found: ${path}` : err.message });
+        } catch (error) {
+          return budget.charge({ error: errorMessage(error) });
         }
       },
     }),
 
     tool({
       name: 'list_dir',
-      description: `List files in a directory (default: the output directory ${config.outDir}/), e.g. to avoid overwriting an existing game.`,
+      description: `List saved game files in the output directory (${config.outDir}/), e.g. to avoid overwriting an existing game.`,
       inputSchema: z.object({
         path: z.string().optional().describe('Directory to list'),
       }),
@@ -285,13 +315,17 @@ export function makeTools(config: AgentConfig, budget: Budget) {
         const limit = budget.take();
         if (limit) return { error: limit };
         try {
-          const entries = readdirSync(path ?? config.outDir, { withFileTypes: true })
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .slice(0, 500)
-            .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+          if (path && resolve(path) !== resolve(config.outDir)) {
+            throw new Error(`list_dir can only list the configured game directory (${config.outDir}/).`);
+          }
+          const entries = (await storage.list())
+            .map((post) => post.file)
+            .filter((file): file is string => file !== null)
+            .sort((a, b) => a.localeCompare(b))
+            .slice(0, 500);
           return budget.charge({ entries });
-        } catch (err: any) {
-          return budget.charge({ error: err.code === 'ENOENT' ? 'Directory does not exist (nothing saved yet)' : err.message });
+        } catch (error) {
+          return budget.charge({ error: errorMessage(error) });
         }
       },
     }),

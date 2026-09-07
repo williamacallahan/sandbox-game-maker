@@ -8,6 +8,7 @@ import { unwrapAsync } from '@openrouter/sdk/types/fp.js';
 import { z } from 'zod';
 import type { AgentConfig } from './config.js';
 import { Budget, makeTools } from './tools.js';
+import { createGameStorage, type GameStorage, type Post } from './storage.js';
 
 export type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
@@ -51,6 +52,14 @@ export type RunStats = BaseUsage & {
   upstreamCost: number | null;
 };
 
+export type RunAgentOptions = {
+  onEvent?: (event: AgentEvent) => void;
+  signal?: AbortSignal;
+  storage?: GameStorage;
+  wantedFilename?: string;
+  savePrompt?: string;
+};
+
 const GatewayUsage = z.object({
   by_model: z.array(z.object({ total_cost: z.number() })),
 });
@@ -74,10 +83,14 @@ async function fetchGeneration(client: OpenRouter, id: string, headers: Record<s
 export async function runAgent(
   config: AgentConfig,
   input: string | ChatMessage[],
-  options?: { onEvent?: (event: AgentEvent) => void; signal?: AbortSignal },
+  options?: RunAgentOptions,
 ) {
   const startedAt = Date.now();
   const cacheKey = config.baseUrl ? crypto.randomUUID() : null;
+  const runId = crypto.randomUUID();
+  const storage = options?.storage ?? createGameStorage(config.outDir);
+  const savedPosts: Post[] = [];
+  const savePrompt = options?.savePrompt ?? (typeof input === 'string' ? input : input.findLast((message) => message.role === 'user')?.content ?? '');
   let providerFromHeaders: string | null = null;
   let upstreamCost: number | null = null;
   const headers: Record<string, string> = cacheKey ? { 'X-LGW-Cache-Key': cacheKey } : { 'X-OpenRouter-Metadata': 'enabled' };
@@ -106,7 +119,29 @@ export async function runAgent(
       ...(config.reasoningEffort && { reasoning: { effort: config.reasoningEffort } }),
       ...(config.maxReasoningTokens && { reasoning: { maxTokens: config.maxReasoningTokens } }),
       input: input as string | Item[],
-      tools: makeTools(config, budget),
+      tools: makeTools(config, budget, {
+        storage,
+        wantedFilename: options?.wantedFilename,
+        saveMetadata: () => ({
+          prompt: savePrompt,
+          model: config.model,
+          ts: Date.now(),
+          runId,
+          settings: {
+            model: config.model,
+            reasoningEffort: config.reasoningEffort,
+            maxToolCalls: config.maxToolCalls,
+            maxContextTokens: config.maxContextTokens,
+            maxOutputTokens: config.maxOutputTokens,
+            maxReasoningTokens: config.maxReasoningTokens,
+            maxCost: config.maxCost,
+            systemPrompt: config.systemPrompt,
+          },
+        }),
+        onSave: (post) => {
+          savedPosts.push(post);
+        },
+      }),
       signal: options?.signal,
       // Steps also bound tool calls loosely (each tool-bearing step has >=1 call);
       // the Budget in tools.ts enforces the exact per-call and context caps.
@@ -258,9 +293,13 @@ export async function runAgent(
       cost: gatewayCost ?? totals.cost ?? null,
       upstreamCost: upstreamCost ?? null,
     };
+    if (savedPosts.length) {
+      await storage.saveStats(runId, stats);
+      for (const post of savedPosts) post.stats = stats;
+    }
     const text = textChunks.join('') || (response.outputText ?? '');
     options?.onEvent?.({ type: 'done', durationMs, stats });
-    return { text, output: response.output, durationMs, stats };
+    return { text, output: response.output, durationMs, stats, savedPosts };
   } finally {
     options?.signal?.removeEventListener('abort', onAbort);
   }
