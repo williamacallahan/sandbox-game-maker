@@ -24,15 +24,13 @@ For an OpenAI-compatible Responses API:
 
 ```bash
 export LLM_API_KEY="..."
-export LLM_BASE_URL="https://dev.llm-gateway.iocloudhost.net/v1"
+export LLM_BASE_URL="https://api.example.com/v1"
 ```
 
-You can also drop defaults into `agent.config.json` in the repo root:
+Keep deployment endpoints and credentials in environment variables. You can put model and budget defaults in `agent.config.json` in the repo root:
 
 ```json
 {
-  "apiKey": "...",
-  "baseUrl": "https://dev.llm-gateway.iocloudhost.net/v1",
   "model": "qwen3.8-27b",
   "maxToolCalls": 8,
   "maxContextTokens": 64000,
