@@ -39,6 +39,8 @@ Keep deployment endpoints and credentials in environment variables. You can put 
 }
 ```
 
+Doppler convenience scripts use the project and config selected outside this repo, such as through `DOPPLER_PROJECT` and `DOPPLER_CONFIG`. The gateway script expects `LLM_API_KEY` and `LLM_BASE_URL` in that config.
+
 Other env overrides: `AGENT_MODEL`, `AGENT_MAX_TOOL_CALLS`, `AGENT_MAX_CONTEXT_TOKENS`, `AGENT_MAX_OUTPUT_TOKENS`, `AGENT_MAX_REASONING_TOKENS`, `AGENT_MAX_COST`.
 
 ### 3. Start the dev server on port 3000
