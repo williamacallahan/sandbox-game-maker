@@ -159,8 +159,22 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     return versions.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
   }
 
+  async function gameExists(filename: string): Promise<boolean> {
+    return remote ? remote.file(`games/${filename}.json`).exists() : exists(join(recordsDir, `${filename}.json`));
+  }
+
   return {
     mode: remote ? 's3' as const : 'local' as const,
+    exists: gameExists,
+    /** First free name among filename, name-2.ext, name-3.ext, … A new game never overwrites or versions an existing one. */
+    async uniqueName(filename: string): Promise<string> {
+      if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
+      const dot = filename.lastIndexOf('.');
+      for (let n = 1; ; n++) {
+        const candidate = n === 1 ? filename : `${filename.slice(0, dot)}-${n}${filename.slice(dot)}`;
+        if (!await gameExists(candidate)) return candidate;
+      }
+    },
     async save(filename: string, content: string, metadata: SavePost, overwrite = false): Promise<Post> {
       if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
       const { runId, ...fields } = metadata;
@@ -169,13 +183,10 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       const recordPath = join(recordsDir, `${filename}.json`);
       // ponytail: check-then-write race is acceptable here; concurrent saves of
       // the same filename are a caller-level collision, not a normal path.
-      if (remote) {
-        const key = `games/${filename}.json`;
-        if (!overwrite && await remote.file(key).exists()) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
-        await remote.write(key, JSON.stringify(record), { type: 'application/json' });
-      } else {
+      if (!overwrite && await gameExists(filename)) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
+      if (remote) await remote.write(`games/${filename}.json`, JSON.stringify(record), { type: 'application/json' });
+      else {
         await mkdir(recordsDir, { recursive: true });
-        if (!overwrite && await exists(recordPath)) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
         await atomicWrite(recordPath, JSON.stringify(record));
       }
       // The record owns reads; this export keeps local CLI output convenient.

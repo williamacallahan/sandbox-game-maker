@@ -141,6 +141,9 @@ const server = Bun.serve({
         return json({ error: `filename must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
       }
       const targetFile = existingFile ?? wantedFile ?? undefined;
+      if (wantedFile && !existingFile && await storage.exists(wantedFile)) {
+        return json({ error: `game ${JSON.stringify(wantedFile)} already exists; use Improve to change it or pick another filename` }, 409);
+      }
 
       let config: AgentConfig;
       try {
@@ -164,10 +167,14 @@ const server = Bun.serve({
         fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
       }
 
+      // Late callbacks (onTurnEnd metadata) and client disconnects must never enqueue on a closed
+      // controller: that throw escaped the handler and exited the process (ERR_INVALID_STATE, 2026-09-08).
+      let open = true;
+      const abort = new AbortController();
       const stream = new ReadableStream({
         async start(controller) {
           const enc = new TextEncoder();
-          const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + '\n'));
+          const send = (o: unknown) => { if (open) controller.enqueue(enc.encode(JSON.stringify(o) + '\n')); };
           try {
             const { savedPosts } = await runAgent(config, fullPrompt, {
               storage,
@@ -175,13 +182,15 @@ const server = Bun.serve({
               savePrompt: prompt,
               overwrite: Boolean(existingFile),
               onEvent: send,
+              signal: abort.signal,
             });
             for (const post of savedPosts) send({ type: 'post', post });
           } catch (error) {
             send({ type: 'error', message: errorMessage(error) });
           }
-          controller.close();
+          if (open) { open = false; controller.close(); }
         },
+        cancel() { open = false; abort.abort(); },
       });
       return new Response(stream, { headers: { 'content-type': 'application/x-ndjson' } });
     }

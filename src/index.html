@@ -467,7 +467,12 @@ async function generate() {
         ...(improveFile && { existingFile: improveFile }),
       }),
     });
-    if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
+    if (!res.ok) {
+      const body = await res.text();
+      let message = body || res.statusText;
+      try { message = JSON.parse(body).error ?? message; } catch {}
+      throw new Error(message);
+    }
     await readGeneration(res, state, log, status);
     await finishGeneration(pending, state.finishedPosts);
   } catch (err) {

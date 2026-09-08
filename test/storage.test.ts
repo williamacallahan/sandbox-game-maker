@@ -169,6 +169,38 @@ describe('game storage', () => {
     });
   });
 
+  test('gives a model-picked filename a unique suffix instead of overwriting or versioning', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      expect(await storage.exists('pong.html')).toBe(false);
+      expect(await storage.uniqueName('pong.html')).toBe('pong.html');
+      await storage.save('pong.html', '<main>first</main>', savePost(1));
+      await storage.save('pong-2.html', '<main>taken</main>', savePost(2));
+      expect(await storage.exists('pong.html')).toBe(true);
+      expect(await storage.uniqueName('pong.html')).toBe('pong-3.html');
+
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const [save] = makeTools(config, new Budget(4, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'again', model: 'tool-model', ts: 3 }),
+      });
+      expect(await save.function.execute({ filename: 'pong.html', content: playableHtml, instructions: 'Click play.' }))
+        .toMatchObject({ written: true, path: join(outDir, 'pong-3.html') });
+      expect((await storage.read('pong.html')).content).toBe('<main>first</main>');
+      expect((await storage.read('pong-3.html')).content).toBe(playableHtml);
+
+      // Improve keeps the requested name and overwrites in place (a new version, not a new file).
+      const [improve] = makeTools(config, new Budget(4, 10_000, 0), {
+        storage, wantedFilename: 'pong.html', overwrite: true,
+        saveMetadata: () => ({ prompt: 'improve', model: 'tool-model', ts: 4 }),
+      });
+      expect(await improve.function.execute({ filename: 'whatever.html', content: playableHtml, instructions: 'Click play.' }))
+        .toMatchObject({ written: true, path: join(outDir, 'pong.html') });
+      expect((await storage.read('pong.html')).content).toBe(playableHtml);
+      expect(await storage.exists('whatever.html')).toBe(false);
+    });
+  });
+
   test('makes every game tool use storage and applies the requested filename at save time', async () => {
     await withOutDir(async (outDir) => {
       const storage = createGameStorage(outDir, {});

@@ -252,10 +252,11 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
       execute: async ({ filename, content, instructions }) => {
         const limit = budget.take();
         if (limit) return { error: limit };
-        const target = options.wantedFilename ?? filename;
-        if (!GAME_FILENAME.test(target)) {
+        if (!GAME_FILENAME.test(options.wantedFilename ?? filename)) {
           return budget.charge({ error: `Invalid filename ${JSON.stringify(filename)}: must match ${GAME_FILENAME}` });
         }
+        // A requested name (new or Improve) is used as-is; a model-picked name gets a unique suffix on collision.
+        const target = options.wantedFilename ?? await storage.uniqueName(filename);
         const post = await storage.save(target, content, { ...saveMetadata(), instructions }, options.overwrite);
         options.onSave?.(post);
         return budget.charge({ written: true, path: `${config.outDir}/${target}` });
