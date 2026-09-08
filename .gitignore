@@ -3,3 +3,4 @@ node_modules/
 .env
 dogfood-output/
 .infisical.json
+games/.records/
