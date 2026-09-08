@@ -95,7 +95,10 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     try {
       return remote ? await remote.file(`games/stats/${runId}.json`).json()
         : JSON.parse(await readFile(join(recordsDir, 'stats', `${runId}.json`), 'utf8'));
-    } catch (error) { if (missing(error)) return null; throw error; }
+    } catch (error) {
+      if (missing(error)) return null;
+      throw error;
+    }
   }
 
   return {
