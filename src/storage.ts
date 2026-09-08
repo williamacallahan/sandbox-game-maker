@@ -1,4 +1,5 @@
 import { S3Client } from 'bun';
+import { S3Client as AwsS3Client, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AgentConfig } from './config.js';
@@ -17,6 +18,7 @@ export type Post = {
 };
 type Record = { content: string; post: Post; statsRunId?: string };
 export type SavePost = Omit<Post, 'file'> & { runId?: string };
+export type GameVersion = { versionId: string; lastModified: Date; isLatest: boolean; eTag: string };
 
 function missing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'NoSuchKey');
@@ -58,6 +60,14 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     endpoint: env.GAME_STORAGE_ENDPOINT, region: env.GAME_STORAGE_REGION, bucket: env.GAME_STORAGE_BUCKET,
     accessKeyId: env.GAME_STORAGE_ACCESS_KEY_ID, secretAccessKey: env.GAME_STORAGE_SECRET_ACCESS_KEY,
   }) : null;
+  const awsClient = configured ? new AwsS3Client({
+    endpoint: env.GAME_STORAGE_ENDPOINT,
+    region: env.GAME_STORAGE_REGION,
+    credentials: {
+      accessKeyId: env.GAME_STORAGE_ACCESS_KEY_ID!,
+      secretAccessKey: env.GAME_STORAGE_SECRET_ACCESS_KEY!,
+    },
+  }) : null;
   const recordsDir = join(outDir, '.records');
 
   async function readFeed(): Promise<Post[]> {
@@ -90,6 +100,24 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     return record;
   }
 
+  async function readVersionRecord(filename: string, versionId: string): Promise<Record> {
+    if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
+    if (!awsClient) throw new Error('Versioned reads require S3 storage.');
+    const key = `games/${filename}.json`;
+    const response = await awsClient.send(new GetObjectCommand({
+      Bucket: env.GAME_STORAGE_BUCKET!,
+      Key: key,
+      VersionId: versionId,
+    }));
+    const body = await response.Body?.transformToString();
+    if (!body) throw new Error('Version not found.');
+    const record: Record = JSON.parse(body);
+    if (typeof record.content !== 'string' || record.post?.file !== filename || typeof record.post.prompt !== 'string' || typeof record.post.model !== 'string' || !Number.isFinite(record.post.ts)) {
+      throw new Error('Invalid stored game record.');
+    }
+    return record;
+  }
+
   async function readStats(runId: string): Promise<RunStats | null> {
     if (!/^[a-f0-9-]{36}$/.test(runId)) throw new Error('Invalid stored run identifier.');
     try {
@@ -101,9 +129,39 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     }
   }
 
+  async function listVersions(filename: string): Promise<GameVersion[]> {
+    if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
+    if (!awsClient) return [];
+    const key = `games/${filename}.json`;
+    const versions: GameVersion[] = [];
+    let keyMarker: string | undefined;
+    let versionIdMarker: string | undefined;
+    do {
+      const response = await awsClient.send(new ListObjectVersionsCommand({
+        Bucket: env.GAME_STORAGE_BUCKET!,
+        Prefix: key,
+        KeyMarker: keyMarker,
+        VersionIdMarker: versionIdMarker,
+      }));
+      for (const v of response.Versions ?? []) {
+        if (v.Key === key && v.VersionId && v.LastModified && v.ETag) {
+          versions.push({
+            versionId: v.VersionId,
+            lastModified: v.LastModified,
+            isLatest: v.IsLatest ?? false,
+            eTag: v.ETag.replace(/^"|"$/g, ''),
+          });
+        }
+      }
+      keyMarker = response.NextKeyMarker;
+      versionIdMarker = response.NextVersionIdMarker;
+    } while (keyMarker || versionIdMarker);
+    return versions.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+  }
+
   return {
     mode: remote ? 's3' as const : 'local' as const,
-    async save(filename: string, content: string, metadata: SavePost): Promise<Post> {
+    async save(filename: string, content: string, metadata: SavePost, overwrite = false): Promise<Post> {
       if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
       const { runId, ...fields } = metadata;
       const post: Post = { ...fields, file: filename };
@@ -113,11 +171,11 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       // the same filename are a caller-level collision, not a normal path.
       if (remote) {
         const key = `games/${filename}.json`;
-        if (await remote.file(key).exists()) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
+        if (!overwrite && await remote.file(key).exists()) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
         await remote.write(key, JSON.stringify(record), { type: 'application/json' });
       } else {
         await mkdir(recordsDir, { recursive: true });
-        if (await exists(recordPath)) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
+        if (!overwrite && await exists(recordPath)) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
         await atomicWrite(recordPath, JSON.stringify(record));
       }
       // The record owns reads; this export keeps local CLI output convenient.
@@ -127,8 +185,8 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       } catch { console.warn('Game saved, but its local file export failed.'); }
       return post;
     },
-    async read(filename: string): Promise<{ content: string; post: Post }> {
-      const record = await readRecord(filename);
+    async read(filename: string, versionId?: string): Promise<{ content: string; post: Post }> {
+      const record = versionId ? await readVersionRecord(filename, versionId) : await readRecord(filename);
       if (record.statsRunId) record.post.stats = await readStats(record.statsRunId);
       return { content: record.content, post: record.post };
     },
@@ -179,6 +237,7 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
         await atomicWrite(join(recordsDir, 'stats', `${runId}.json`), JSON.stringify(stats));
       }
     },
+    versions: listVersions,
   };
 }
 export type GameStorage = ReturnType<typeof createGameStorage>;

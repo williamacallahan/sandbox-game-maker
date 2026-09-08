@@ -105,11 +105,23 @@
   .actions button, .actions a { border: 0; background: none; padding: 0; cursor: pointer; color: var(--text); display: flex; }
   .actions svg { width: 24px; height: 24px; }
   .actions .liked svg { fill: #ed4956; stroke: #ed4956; }
+  .actions .improve { font: inherit; font-weight: 600; font-size: 13px; color: var(--text); display: flex; align-items: center; }
+  .versions { margin-left: auto; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--text); }
+  .versions:disabled { opacity: .5; }
   .caption { padding: 6px 12px 12px; font-size: 13px; }
   .caption b { margin-right: 6px; }
   .caption .model { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   .error { margin: 0 12px 12px; padding: 10px; border-radius: 8px; background: #fdecec; color: #c62828; font-size: 12px; }
+
+  /* improve modal */
+  #improve-overlay { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
+  #improve-overlay[hidden] { display: none; }
+  .improve-modal { background: #fff; border-radius: 12px; width: min(470px, calc(100% - 32px)); max-height: 90vh; overflow-y: auto; }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .modal-head b { font-size: 15px; }
+  .modal-head button { border: 0; background: none; color: var(--muted); font: inherit; cursor: pointer; }
+  #improve-composer-host .card { margin: 0; border: 0; border-radius: 0; }
 </style>
 </head>
 <body>
@@ -139,7 +151,7 @@
         <div><label for="maxOutputTokens">Max output tokens <span class="tip" data-tooltip="Per-message cap: maximum tokens the model may generate in a single response. Does not include reasoning or tool-call tokens.">?</span></label><input id="maxOutputTokens" type="number" min="1" step="1" placeholder="model default"></div>
         <div><label for="maxReasoningTokens">Max reasoning tokens <span class="tip" data-tooltip="Per-message cap: maximum reasoning tokens the model may use in a single response.">?</span></label><input id="maxReasoningTokens" type="number" min="1" step="1" placeholder="model default"></div>
         <div><label for="reasoningEffort">Reasoning</label><select id="reasoningEffort"><option value="">model default</option></select></div>
-        <div><label for="filename">Filename</label><input id="filename" placeholder="auto — e.g. my-game.html" pattern="[a-z0-9][a-z0-9-]*\.(html|js)" title="lowercase kebab-case, no underscores, ending in .html or .js"></div>
+        <div class="wide"><label for="filename">Filename</label><input id="filename" placeholder="auto — e.g. my-game.html" pattern="[a-z0-9][a-z0-9-]*\.(html|js)" title="lowercase kebab-case, no underscores, ending in .html or .js"></div>
       </div>
     </details>
     <div class="composer-foot"><button id="post-btn" disabled>Post</button></div>
@@ -149,10 +161,20 @@
   <div id="feed"><p class="empty">loading…</p></div>
 </main>
 
+<div id="improve-overlay" hidden>
+  <div class="improve-modal">
+    <div class="modal-head"><b id="improve-title">Improve game</b><button type="button" id="improve-cancel">Cancel</button></div>
+    <div id="improve-composer-host"></div>
+  </div>
+</div>
+
 <script type="module">
 const $ = (s, el = document) => el.querySelector(s);
 const promptEl = $('#prompt'), systemEl = $('#system'), postBtn = $('#post-btn');
+const main = $('main'), composer = $('.composer'), improveOverlay = $('#improve-overlay');
+const improveHost = $('#improve-composer-host'), improveTitle = $('#improve-title');
 let cfg = null;
+let improveFile = null;
 
 const HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>';
 const OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
@@ -207,6 +229,61 @@ function detailsPanel(p) {
     '<pre class="detail-sys">' + esc(s.systemPrompt) + '</pre>';
 }
 
+async function loadVersions(file, select) {
+  try {
+    const res = await fetch('/api/versions/' + encodeURIComponent(file));
+    const versions = await res.json();
+    if (!res.ok) throw new Error(versions.error);
+    if (!versions.length) { select.hidden = true; return; }
+    select.hidden = false;
+    select.innerHTML = versions.map((v, i) => {
+      const label = (i === 0 ? 'Latest' : 'Version') + ' · ' + new Date(v.lastModified).toLocaleString(undefined, { timeZoneName: 'short' }) + ' · ' + esc(v.eTag);
+      return '<option value="' + (i === 0 ? '' : esc(v.versionId)) + '">' + label + '</option>';
+    }).join('');
+  } catch (error) {
+    select.hidden = true;
+  }
+}
+
+function openImprove(file, p) {
+  improveFile = file;
+  improveTitle.textContent = 'Improve ' + file;
+  improveHost.append(composer);
+  promptEl.value = '';
+  postBtn.textContent = 'Improve';
+  postBtn.disabled = true;
+  const s = p.settings ?? {};
+  systemEl.value = s.systemPrompt ?? cfg.systemPrompt;
+  $('#model').value = s.model ?? cfg.model;
+  $('#maxToolCalls').value = s.maxToolCalls ?? cfg.maxToolCalls;
+  $('#maxContextTokens').value = s.maxContextTokens ?? cfg.maxContextTokens;
+  $('#maxOutputTokens').value = s.maxOutputTokens ?? '';
+  $('#maxReasoningTokens').value = s.maxReasoningTokens ?? '';
+  $('#maxCost').value = s.maxCost ?? cfg.maxCost;
+  $('#reasoningEffort').value = s.reasoningEffort ?? '';
+  $('#filename').parentElement.style.display = 'none';
+  syncEfforts();
+  improveOverlay.hidden = false;
+  promptEl.focus();
+}
+
+function closeImprove() {
+  improveFile = null;
+  improveOverlay.hidden = true;
+  main.insertBefore(composer, main.firstChild);
+  postBtn.textContent = 'Post';
+  postBtn.disabled = !promptEl.value.trim();
+  promptEl.value = cfg.defaultPrompt;
+  systemEl.value = cfg.systemPrompt;
+  for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxCost']) $('#' + key).value = cfg[key];
+  $('#maxOutputTokens').value = '';
+  $('#maxReasoningTokens').value = '';
+  $('#reasoningEffort').value = '';
+  $('#filename').value = '';
+  $('#filename').parentElement.style.display = '';
+  syncEfforts();
+}
+
 function postCard(p) {
   const card = document.createElement('article');
   card.className = 'card';
@@ -228,13 +305,26 @@ function postCard(p) {
     '<div class="detail-panel settings-panel" hidden>' + detailsPanel(p) + '</div>' +
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
-    '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a></div>' +
+    '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a>' +
+    '<button class="improve" type="button" title="improve this game">Improve</button>' +
+    '<select class="versions" title="version history" hidden><option>Versions</option></select></div>' +
     '<div class="caption"><b>' + esc(name) + '</b>' + esc(p.prompt) + modelTag + '</div>';
   const iframe = $('iframe', card);
   for (const ev of ['mouseenter', 'click']) {
     iframe.addEventListener(ev, () => { try { iframe.contentWindow?.focus(); } catch {} });
   }
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
+  $('.improve', card).addEventListener('click', () => openImprove(p.file, p));
+  const versionsSelect = $('.versions', card);
+  versionsSelect.addEventListener('change', () => {
+    const versionId = versionsSelect.value;
+    if (isJs) {
+      iframe.src = '/games/' + p.file + '?play=1' + (versionId ? '&versionId=' + encodeURIComponent(versionId) : '');
+    } else {
+      iframe.src = '/games/' + p.file + (versionId ? '?versionId=' + encodeURIComponent(versionId) : '');
+    }
+  });
+  loadVersions(p.file, versionsSelect);
   for (const [buttonSelector, panelSelector] of [
     ['.how-btn', '.how-panel'],
     ['.details-btn', '.settings-panel'],
@@ -374,6 +464,7 @@ async function generate() {
         maxCost: $('#maxCost').value,
         reasoningEffort: $('#reasoningEffort').value,
         filename: $('#filename').value.trim(),
+        ...(improveFile && { existingFile: improveFile }),
       }),
     });
     if (!res.ok) throw new Error((await res.json()).error ?? res.statusText);
@@ -383,9 +474,13 @@ async function generate() {
     stream.insertAdjacentHTML('afterend', '<div class="error">' + esc(err.message) + '</div>');
     $('.spinner', pending)?.remove();
   } finally {
+    if (improveFile) closeImprove();
     postBtn.disabled = !promptEl.value.trim();
   }
 }
+
+improveOverlay.addEventListener('click', (e) => { if (e.target === improveOverlay) closeImprove(); });
+$('#improve-cancel').addEventListener('click', closeImprove);
 
 document.querySelectorAll('.chip').forEach((chip) =>
   chip.addEventListener('click', () => {
@@ -435,7 +530,7 @@ const feedPromise = loadFeed().catch((error) => {
 cfg = await fetch('/api/config').then((r) => r.json());
 systemEl.value = cfg.systemPrompt;
 promptEl.value = cfg.defaultPrompt;
-for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxOutputTokens', 'maxCost']) $('#' + key).value = cfg[key];
+for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxCost']) $('#' + key).value = cfg[key];
 syncEfforts();
 postBtn.disabled = false;
 await feedPromise;

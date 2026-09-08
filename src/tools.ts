@@ -233,6 +233,7 @@ export type MakeToolsOptions = {
   wantedFilename?: string;
   saveMetadata?: () => Omit<SavePost, 'instructions'>;
   onSave?: (post: Post) => void;
+  overwrite?: boolean;
 };
 
 /** Tools close over the run's budget, so build them per run. */
@@ -255,7 +256,7 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
         if (!GAME_FILENAME.test(target)) {
           return budget.charge({ error: `Invalid filename ${JSON.stringify(filename)}: must match ${GAME_FILENAME}` });
         }
-        const post = await storage.save(target, content, { ...saveMetadata(), instructions });
+        const post = await storage.save(target, content, { ...saveMetadata(), instructions }, options.overwrite);
         options.onSave?.(post);
         return budget.charge({ written: true, path: `${config.outDir}/${target}` });
       },

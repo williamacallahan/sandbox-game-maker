@@ -8,6 +8,7 @@ import { createGameStorage, GAME_FILENAME } from './storage.js';
 const defaults = loadConfig({}, { skipApiKey: true });
 const storage = createGameStorage(defaults.outDir);
 const GAME_URL = /^\/games\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
+const VERSION_URL = /^\/api\/versions\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
 
 // ponytail: cached for the server's lifetime; restart to refresh the model list.
 let modelsCache: string | null = null;
@@ -68,11 +69,22 @@ const server = Bun.serve({
       }
     }
 
+    const version = VERSION_URL.exec(url.pathname);
+    if (version && req.method === 'GET') {
+      try {
+        return json(await storage.versions(version[1]));
+      } catch (error) {
+        if (isMissing(error)) return new Response('not found', { status: 404 });
+        return json({ error: errorMessage(error) }, 502);
+      }
+    }
+
     const game = GAME_URL.exec(url.pathname);
     if (game) {
+      const versionId = url.searchParams.get('versionId') ?? undefined;
       let content: string;
       try {
-        ({ content } = await storage.read(game[1]));
+        ({ content } = await storage.read(game[1], versionId));
       } catch (error) {
         if (isMissing(error)) return new Response('not found', { status: 404 });
         return json({ error: errorMessage(error) }, 502);
@@ -80,7 +92,8 @@ const server = Bun.serve({
       // .js terminal games play in the browser: ?play wraps them in the xterm.js
       // runner and loads the source as a sandboxed external script.
       if (game[2] === 'js' && url.searchParams.has('play')) {
-        const html = playerHtml.replace('__GAME_URL__', `/games/${game[1]}`);
+        const scriptUrl = '/games/' + game[1] + (versionId ? '?versionId=' + encodeURIComponent(versionId) : '');
+        const html = playerHtml.replace('__GAME_URL__', scriptUrl);
         return new Response(html, {
           headers: {
             'content-type': 'text/html',
@@ -119,10 +132,15 @@ const server = Bun.serve({
         return json({ error: err.message }, 400);
       }
 
+      const existingFile = typeof body.existingFile === 'string' && body.existingFile.trim() ? body.existingFile.trim() : null;
+      if (existingFile && !GAME_FILENAME.test(existingFile)) {
+        return json({ error: `existingFile must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
+      }
       const wantedFile = typeof body.filename === 'string' && body.filename.trim() ? body.filename.trim() : null;
       if (wantedFile && !GAME_FILENAME.test(wantedFile)) {
         return json({ error: `filename must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
       }
+      const targetFile = existingFile ?? wantedFile ?? undefined;
 
       let config: AgentConfig;
       try {
@@ -131,16 +149,31 @@ const server = Bun.serve({
         return json({ error: err.message }, 500);
       }
 
+      let fullPrompt: string;
+      if (existingFile) {
+        let existing: { post: { prompt: string; instructions?: string } };
+        try {
+          existing = await storage.read(existingFile);
+        } catch (error) {
+          if (isMissing(error)) return json({ error: `game not found: ${existingFile}` }, 404);
+          throw error;
+        }
+        const originalInstructions = existing.post.instructions ?? 'none';
+        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nStart by using read_file to inspect the current source. Then apply this change request and overwrite the same file with save_game (use the same filename "${existingFile}"). Validate the result with validate_game before finishing.\n\nChange request: ${prompt}`;
+      } else {
+        fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
+      }
+
       const stream = new ReadableStream({
         async start(controller) {
           const enc = new TextEncoder();
           const send = (o: unknown) => controller.enqueue(enc.encode(JSON.stringify(o) + '\n'));
           try {
-            const fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
             const { savedPosts } = await runAgent(config, fullPrompt, {
               storage,
-              wantedFilename: wantedFile ?? undefined,
+              wantedFilename: targetFile,
               savePrompt: prompt,
+              overwrite: Boolean(existingFile),
               onEvent: send,
             });
             for (const post of savedPosts) send({ type: 'post', post });

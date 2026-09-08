@@ -58,6 +58,7 @@ export type RunAgentOptions = {
   storage?: GameStorage;
   wantedFilename?: string;
   savePrompt?: string;
+  overwrite?: boolean;
 };
 
 const GatewayUsage = z.object({
@@ -122,6 +123,7 @@ export async function runAgent(
       tools: makeTools(config, budget, {
         storage,
         wantedFilename: options?.wantedFilename,
+        overwrite: options?.overwrite,
         saveMetadata: () => ({
           prompt: savePrompt,
           model: config.model,
