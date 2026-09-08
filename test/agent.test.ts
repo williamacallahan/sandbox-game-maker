@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Budget, validateGameFile } from '../src/tools.js';
-import { CREATE_SYSTEM_PROMPT, UI_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
+import { CREATE_SYSTEM_PROMPT, GATEWAY_DEFAULT_MODEL, UI_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
 
 describe('Budget', () => {
   test('enforces tool call limit', () => {
@@ -52,6 +52,7 @@ describe('loadConfig', () => {
       const config = loadConfig();
       expect(config.apiKey).toBe('test-key');
       expect(config.baseUrl).toBe('https://gateway.example/v1');
+      expect(config.model).toBe(GATEWAY_DEFAULT_MODEL);
     } finally {
       if (env.key === undefined) delete process.env.LLM_API_KEY;
       else process.env.LLM_API_KEY = env.key;

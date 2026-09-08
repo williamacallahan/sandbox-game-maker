@@ -57,7 +57,7 @@ Open <http://localhost:3000>.
 
 1. Enter your **Prompt** — e.g. *"a neon snake game with wrap-around walls"*.
 2. (Optional) Expand **Settings** and pick a mode: **Game** (default), **Create** (any creative work), or **UI** (an app screen: dashboard, form, card). Each mode loads its own system prompt; UI also sets the model to the gateway's `oui-1` generative-UI model with its declared limits (16384 context tokens, 8192 output tokens). Then change:
-   - **Model** (default `qwen/qwen3.8-flash`)
+   - **Model** (default `qwen/qwen3.8-flash` on OpenRouter, `glm-5.3-flash` when `LLM_BASE_URL` points at the gateway)
    - **System Prompt** (default game rules in `src/config.ts`)
    - **Reasoning Effort** (`low`, `medium`, `high`)
    - **Max Tool Calls**, **Context Tokens**, **Output Tokens**, **Max Cost**

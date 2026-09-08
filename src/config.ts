@@ -106,6 +106,9 @@ export const UI_SYSTEM_PROMPT = [
   BUDGET_RULE,
 ].join('\n');
 
+/** Game/Create default when LLM_BASE_URL points at the gateway (OpenRouter ids are not gateway aliases). */
+export const GATEWAY_DEFAULT_MODEL = 'glm-5.3-flash';
+
 /** Composer defaults for UI mode: the gateway's declared limits for `oui-1`. */
 export const UI_DEFAULTS = { model: 'oui-1', maxContextTokens: 16_384, maxOutputTokens: 8_192 } as const;
 
@@ -143,7 +146,11 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}, opts?: { skipAp
   }
 
   config.apiKey = process.env.LLM_API_KEY || process.env.OPENROUTER_API_KEY || config.apiKey;
-  if (process.env.LLM_BASE_URL) config.baseUrl = process.env.LLM_BASE_URL;
+  if (process.env.LLM_BASE_URL) {
+    config.baseUrl = process.env.LLM_BASE_URL;
+    // The OpenRouter default id does not exist on the gateway; swap it unless a config file chose a model.
+    if (config.model === DEFAULTS.model) config.model = GATEWAY_DEFAULT_MODEL;
+  }
   if (process.env.AGENT_MODEL) config.model = process.env.AGENT_MODEL;
   if (process.env.AGENT_MAX_TOOL_CALLS) config.maxToolCalls = positiveNumber('AGENT_MAX_TOOL_CALLS', process.env.AGENT_MAX_TOOL_CALLS);
   if (process.env.AGENT_MAX_CONTEXT_TOKENS) config.maxContextTokens = positiveNumber('AGENT_MAX_CONTEXT_TOKENS', process.env.AGENT_MAX_CONTEXT_TOKENS);
