@@ -312,11 +312,11 @@ export async function runAgent(
 
   function buildStats(parts: { provider: string | null; reportedTokensPerSec: number | null; usage: BaseUsage & { reasoningTokens: number }; cost: number | null }): RunStats {
     const durationMs = Date.now() - startedAt;
-    const decodeSeconds = firstTokenAt ? (Date.now() - firstTokenAt) / 1000 : 0;
     return {
       provider: parts.provider,
-      // OpenRouter reports decode speed; gateways do not, so estimate output tokens over the streamed span (includes tool time).
-      tokensPerSec: parts.reportedTokensPerSec ?? (decodeSeconds > 0 && parts.usage.outputTokens ? Math.round(parts.usage.outputTokens / decodeSeconds) : null),
+      // OpenRouter reports decode speed; gateways do not. The fallback is output tokens over the whole run
+      // (prefill and tool time included), which understates but never inflates when a provider buffers its stream.
+      tokensPerSec: parts.reportedTokensPerSec ?? (durationMs > 0 && parts.usage.outputTokens ? Math.round(parts.usage.outputTokens / (durationMs / 1000)) : null),
       ttftMs: firstTokenAt ? firstTokenAt - startedAt : null,
       inputTokens: parts.usage.inputTokens,
       outputTokens: parts.usage.outputTokens,
