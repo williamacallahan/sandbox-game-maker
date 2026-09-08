@@ -22,6 +22,16 @@ function missing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'NoSuchKey');
 }
 
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (error) {
+    if (missing(error)) return false;
+    throw error;
+  }
+}
+
 async function atomicWrite(path: string, content: string) {
   const temporary = `${path}.${crypto.randomUUID()}.tmp`;
   try {
@@ -95,10 +105,17 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       const { runId, ...fields } = metadata;
       const post: Post = { ...fields, file: filename };
       const record: Record = { content, post, ...(runId && { statsRunId: runId }) };
-      if (remote) await remote.write(`games/${filename}.json`, JSON.stringify(record), { type: 'application/json' });
-      else {
+      const recordPath = join(recordsDir, `${filename}.json`);
+      // ponytail: check-then-write race is acceptable here; concurrent saves of
+      // the same filename are a caller-level collision, not a normal path.
+      if (remote) {
+        const key = `games/${filename}.json`;
+        if (await remote.file(key).exists()) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
+        await remote.write(key, JSON.stringify(record), { type: 'application/json' });
+      } else {
         await mkdir(recordsDir, { recursive: true });
-        await atomicWrite(join(recordsDir, `${filename}.json`), JSON.stringify(record));
+        if (await exists(recordPath)) throw new Error(`Game ${JSON.stringify(filename)} already exists.`);
+        await atomicWrite(recordPath, JSON.stringify(record));
       }
       // The record owns reads; this export keeps local CLI output convenient.
       try {

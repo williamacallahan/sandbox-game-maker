@@ -146,14 +146,26 @@ describe('game storage', () => {
       const newerStats = { ...stats, durationMs: 999 };
       const storage = createGameStorage(outDir, {});
       await storage.save(filename, '<main>first</main>', savePost(1, firstRun));
-      const newer = await storage.save(filename, '<main>newer</main>', { ...savePost(2, newerRun), prompt: 'newer game' });
+      const newer = await storage.save('statistics-game-newer.html', '<main>newer</main>', { ...savePost(2, newerRun), prompt: 'newer game' });
       await storage.saveStats(firstRun, stats);
       await storage.saveStats(newerRun, newerStats);
 
-      const restored = await createGameStorage(outDir, {}).read(filename);
+      const restored = await createGameStorage(outDir, {}).read('statistics-game-newer.html');
       expect(restored.content).toBe('<main>newer</main>');
       expect(restored.post).toMatchObject(newer);
       expect(restored.post.stats).toEqual(newerStats);
+    });
+  });
+
+  test('rejects saving a game that already exists', async () => {
+    await withOutDir(async (outDir) => {
+      const filename = 'already-exists.html';
+      const storage = createGameStorage(outDir, {});
+      await storage.save(filename, '<main>first</main>', savePost(1));
+      await expect(storage.save(filename, '<main>second</main>', savePost(2))).rejects.toThrow('already exists');
+
+      const restored = await createGameStorage(outDir, {}).read(filename);
+      expect(restored.content).toBe('<main>first</main>');
     });
   });
 
@@ -256,7 +268,6 @@ storageIntegration('persists, reads, lists, and paginates records through MinIO'
       const keys = [html, terminal, ...pages.map((page) => page.filename)].map((file) => `games/${file}.json`);
       keys.push(`games/stats/${firstRun}.json`, `games/stats/${newerRun}.json`);
       try {
-        await writer.save(html, '<main>first remote html</main>', savePost(1, firstRun));
         expect(await save.function.execute({ filename: html, content: playableHtml, instructions: 'Click play.' }))
           .toMatchObject({ written: true, path: join(writerOutDir, html) });
         expect(await save.function.execute({ filename: terminal, content: playableTerminalGame, instructions: 'Press a key.' }))
