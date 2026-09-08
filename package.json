@@ -7,10 +7,10 @@
   "scripts": {
     "start": "bun run src/cli.ts",
     "dev": "bun --watch src/cli.ts",
-    "dev:openrouter": "doppler run --no-check-version --silent --no-fallback --forward-signals=true --only-secrets OPENROUTER_API_KEY -- bun --watch src/cli.ts",
+    "dev:openrouter": "scripts/with-secrets.sh bun --watch src/cli.ts",
     "ui": "bun run src/server.ts",
-    "ui:openrouter": "doppler run --no-check-version --silent --no-fallback --forward-signals=true --only-secrets OPENROUTER_API_KEY -- bun --watch src/server.ts",
-    "ui:llm-gateway": "doppler run --no-check-version --silent --no-fallback --forward-signals=true --only-secrets LLM_API_KEY,LLM_BASE_URL -- bun --watch src/server.ts",
+    "ui:openrouter": "scripts/with-secrets.sh bun --watch src/server.ts",
+    "ui:llm-gateway": "INFISICAL_PATH=/llm-gateway scripts/with-secrets.sh bun --watch src/server.ts",
     "build": "tsc --noEmit",
     "test": "bun test"
   },

@@ -39,7 +39,7 @@ Keep deployment endpoints and credentials in environment variables. You can put 
 }
 ```
 
-Doppler convenience scripts use the project and config selected outside this repo, such as through `DOPPLER_PROJECT` and `DOPPLER_CONFIG`. The gateway script expects `LLM_API_KEY` and `LLM_BASE_URL` in that config.
+The `*:openrouter` and `ui:llm-gateway` scripts run through `scripts/with-secrets.sh`. When `LLM_API_KEY` or `OPENROUTER_API_KEY` is already set (the deployed container), it runs the command as-is. Otherwise it injects from the Infisical project bound by the gitignored `.infisical.json`: environment `dev`, folder `/` for `OPENROUTER_API_KEY` and `/llm-gateway` for `LLM_API_KEY` and `LLM_BASE_URL`. Bind a checkout once with `infisical login` then `infisical init`; `INFISICAL_ENV` and `INFISICAL_PATH` override the defaults.
 
 Other env overrides: `AGENT_MODEL`, `AGENT_MAX_TOOL_CALLS`, `AGENT_MAX_CONTEXT_TOKENS`, `AGENT_MAX_OUTPUT_TOKENS`, `AGENT_MAX_REASONING_TOKENS`, `AGENT_MAX_COST`.
 
