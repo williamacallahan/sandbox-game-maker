@@ -101,12 +101,12 @@
   .media { position: relative; aspect-ratio: 1 / 1; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #000; }
   .media iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
   .media pre { margin: 0; width: 100%; height: 100%; overflow: auto; padding: 14px; background: #111; color: #e8e8e8; font: 11px/1.5 ui-monospace, Menlo, monospace; }
-  .actions { display: flex; gap: 14px; padding: 8px 12px 0; }
+  .actions { display: flex; align-items: center; gap: 14px; padding: 8px 12px 0; }
   .actions button, .actions a { border: 0; background: none; padding: 0; cursor: pointer; color: var(--text); display: flex; }
   .actions svg { width: 24px; height: 24px; }
   .actions .liked svg { fill: #ed4956; stroke: #ed4956; }
   .actions .improve { font: inherit; font-weight: 600; font-size: 13px; color: var(--text); display: flex; align-items: center; }
-  .versions { margin-left: auto; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--text); }
+  .versions { margin-left: auto; min-width: 0; max-width: 55%; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--text); text-overflow: ellipsis; }
   .versions:disabled { opacity: .5; }
   .caption { padding: 6px 12px 12px; font-size: 13px; }
   .caption b { margin-right: 6px; }
@@ -238,7 +238,9 @@ async function loadVersions(file, select) {
     if (!versions.length) { select.hidden = true; return; }
     select.hidden = false;
     select.innerHTML = versions.map((v, i) => {
-      const label = (i === 0 ? 'Latest' : 'Version') + ' · ' + new Date(v.lastModified).toLocaleString(undefined, { timeZoneName: 'short' }) + ' · ' + esc(v.eTag);
+      // One short line per version so the select fits a phone-width card; the eTag prefix separates same-minute saves.
+      const when = new Date(v.lastModified).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const label = (i === 0 ? 'Latest · ' : '') + when + ' · ' + esc(v.eTag.slice(0, 6));
       return '<option value="' + (i === 0 ? '' : esc(v.versionId)) + '">' + label + '</option>';
     }).join('');
   } catch (error) {
