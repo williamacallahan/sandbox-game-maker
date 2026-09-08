@@ -39,6 +39,8 @@ Keep deployment endpoints and credentials in environment variables. You can put 
 }
 ```
 
+The model list in Settings comes from the configured endpoint: OpenRouter's catalog by default, or the gateway's `/v1/models` when `LLM_BASE_URL` is set.
+
 The `*:openrouter` and `ui:llm-gateway` scripts run through `scripts/with-secrets.sh`. When `LLM_API_KEY` or `OPENROUTER_API_KEY` is already set (the deployed container), it runs the command as-is. Otherwise it injects from the Infisical project bound by the gitignored `.infisical.json`: environment `dev`, folder `/` for `OPENROUTER_API_KEY` and `/llm-gateway` for `LLM_API_KEY` and `LLM_BASE_URL`. Bind a checkout once with `infisical login` then `infisical init`; `INFISICAL_ENV` and `INFISICAL_PATH` override the defaults.
 
 Other env overrides: `AGENT_MODEL`, `AGENT_MAX_TOOL_CALLS`, `AGENT_MAX_CONTEXT_TOKENS`, `AGENT_MAX_OUTPUT_TOKENS`, `AGENT_MAX_REASONING_TOKENS`, `AGENT_MAX_COST`.
@@ -54,7 +56,7 @@ Open <http://localhost:3000>.
 ### 4. Generate an HTML game
 
 1. Enter your **Prompt** — e.g. *"a neon snake game with wrap-around walls"*.
-2. (Optional) Expand **Settings** to change:
+2. (Optional) Expand **Settings** and pick a mode: **Game** (default), **Create** (any creative work), or **UI** (an app screen: dashboard, form, card). Each mode loads its own system prompt; UI also sets the model to the gateway's `oui-1` generative-UI model with its declared limits (16384 context tokens, 8192 output tokens). Then change:
    - **Model** (default `qwen/qwen3.8-flash`)
    - **System Prompt** (default game rules in `src/config.ts`)
    - **Reasoning Effort** (`low`, `medium`, `high`)
@@ -74,6 +76,7 @@ The agent streams the generation, calls `save_game` and `validate_game`, and sav
 
 - **Default game system prompt + hard-coded defaults** — `src/config.ts` (`DEFAULTS`)
 - **Create-mode system prompt** — `src/config.ts` (`CREATE_SYSTEM_PROMPT`)
+- **UI-mode system prompt and model limits** — `src/config.ts` (`UI_SYSTEM_PROMPT`, `UI_DEFAULTS`)
 - **Per-run overrides** — the UI fields, `agent.config.json`, or env vars
 
 ### 7. Build and test

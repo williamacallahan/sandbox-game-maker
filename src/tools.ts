@@ -236,30 +236,46 @@ export type MakeToolsOptions = {
   overwrite?: boolean;
 };
 
+/** Kebab-case filename from free text, e.g. "A Music Player!" → "a-music-player.html". */
+function slugFilename(text: string): string {
+  const slug = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return (slug.length <= 40 ? slug : slug.slice(0, 40).replace(/-[^-]*$/, '') || 'untitled') + '.html';
+}
+
 /** Tools close over the run's budget, so build them per run. */
 export function makeTools(config: AgentConfig, budget: Budget, options: MakeToolsOptions = {}) {
   const storage = options.storage ?? createGameStorage(config.outDir);
   const saveMetadata = options.saveMetadata ?? (() => ({ prompt: '', model: config.model, ts: Date.now() }));
+  // Names this run already saved (requested → stored), so a fix-and-resave overwrites instead of forking "-2".
+  const ownNames = new Map<string, string>();
+  let lastTarget: string | undefined;
   return [
     tool({
       name: 'save_game',
-      description: `Save a finished game file in the gallery (${config.outDir}/). Filename must be lowercase kebab-case ending in .html or .js (no underscores / snake_case). Include concise player instructions for the gallery's How to play panel. Returns the saved path.`,
+      description: `Save a finished game file in the gallery (${config.outDir}/). Filename must be lowercase kebab-case ending in .html or .js (no underscores / snake_case). Include concise player instructions for the gallery's How to play panel. Returns the saved path plus the same validation result as validate_game.`,
       inputSchema: z.object({
-        filename: z.string().describe('Lowercase kebab-case filename with no underscores, e.g. "my-game.html" or "guess-number.js"'),
+        filename: z.string().optional().describe('Lowercase kebab-case filename with no underscores, e.g. "my-game.html" or "guess-number.js"'),
         content: z.string().describe('Complete, self-contained file content'),
-        instructions: z.string().min(1).max(500).describe('Concise controls and objective for the player'),
+        instructions: z.string().max(500).optional().describe('Concise controls and objective for the player'),
       }),
       execute: async ({ filename, content, instructions }) => {
         const limit = budget.take();
         if (limit) return { error: limit };
+        const metadata = saveMetadata();
+        // Small models sometimes drop a field; the prompt is a usable name and description.
+        filename ??= lastTarget ?? slugFilename(metadata.prompt);
+        instructions ||= metadata.prompt.slice(0, 500);
         if (!GAME_FILENAME.test(options.wantedFilename ?? filename)) {
           return budget.charge({ error: `Invalid filename ${JSON.stringify(filename)}: must match ${GAME_FILENAME}` });
         }
         // A requested name (new or Improve) is used as-is; a model-picked name gets a unique suffix on collision.
-        const target = options.wantedFilename ?? await storage.uniqueName(filename);
-        const post = await storage.save(target, content, { ...saveMetadata(), instructions }, options.overwrite);
+        const target = options.wantedFilename ?? ownNames.get(filename) ?? await storage.uniqueName(filename);
+        const post = await storage.save(target, content, { ...metadata, instructions }, options.overwrite || ownNames.has(target));
+        ownNames.set(filename, target).set(target, target);
+        lastTarget = target;
         options.onSave?.(post);
-        return budget.charge({ written: true, path: `${config.outDir}/${target}` });
+        const { valid, issues } = validateGameContent(target, content);
+        return budget.charge({ written: true, path: `${config.outDir}/${target}`, valid, ...(issues.length && { issues, hint: 'Fix these issues and save again with the same filename.' }) });
       },
     }),
 

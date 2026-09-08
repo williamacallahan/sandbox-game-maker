@@ -45,16 +45,17 @@ export interface AgentConfig {
 /** Shared by both prompts: describes the one Budget mechanism in tools.ts. */
 const BUDGET_RULE = '- Tool calls and context are budgeted. If a tool returns a budget-exhausted error, stop calling tools and finish with what you have.';
 
-/** Safety, rendering, and interaction rules shared by game and create-mode prompts. */
+/** Safety, rendering, and interaction rules shared by the game, create, and UI prompts. */
 const SHARED_GAME_RULES = [
   '- One self-contained file, zero build steps/network. Inline CSS/JS. No frameworks, CDNs, npm, web fonts, or external media.',
   '- No localStorage/sessionStorage, innerHTML/outerHTML, eval/new Function, document.write, or string-argument setTimeout/setInterval.',
   '- Fill the square (1:1) viewport exactly. Body must use `margin:0; overflow:hidden` and set `width/height` (or `min-width/min-height`) to `100vw/100vh`. Size a canvas to `window.innerWidth/Height` on load and resize. No scrollbars, no letterboxing, no fixed page dimensions.',
   '- Interactive works must register a `click`/`pointerdown`/`touchstart`/`keydown` listener (move/scroll/resize alone do not count). Buttons and controls use `click`.',
   '- Overlays must be dismissible. Any overlay div must have `data-game-overlay` and hide when `e.data?.type === "game-maker:dismiss-overlay"` inside a `message` listener.',
-  '- Start on the first interaction. Do not cover the play area with titles, prompts, or instructions.',
   '- Vanilla JavaScript only.',
 ];
+
+const START_RULE = '- Start on the first interaction. Do not cover the play area with titles, prompts, or instructions.';
 
 /**
  * Create Mode: the request is the subject of a creative work to build, not
@@ -70,6 +71,7 @@ export const CREATE_SYSTEM_PROMPT = [
   '- When a request could be either, build the interactive one.',
   '- One self-contained file with inline CSS and vanilla JS. No build steps, no network, no frameworks, CDNs, npm installs, web fonts, or external media.',
   ...SHARED_GAME_RULES,
+  START_RULE,
   '- Draw images with CSS, SVG, canvas, or data URIs.',
   '- Save with save_game using a short kebab-case filename and concise controls/objective in its instructions field.',
   '- After saving, call validate_game. If the work is interactive, do not finish until valid:true. If it is static, a missing input handler is expected; fix all other issues (external resources, non-dismissible overlay, viewport).',
@@ -78,6 +80,34 @@ export const CREATE_SYSTEM_PROMPT = [
   '- Reply with the saved path and one line. Nothing else.',
   '- A small complete work beats a large broken one.',
 ].join('\n');
+
+/**
+ * UI Mode: the request is an app screen to design (dashboard, form, card,
+ * settings panel, player). Tuned for the gateway's `oui-1` generative-UI
+ * model: no reasoning, 16384-token context, 8192-token output, so the prompt
+ * stays short and asks for a compact document.
+ */
+export const UI_SYSTEM_PROMPT = [
+  'You design polished, self-contained app screens from a single prompt: dashboards, cards, forms, settings panels, feeds, players.',
+  '',
+  'Rules:',
+  '- Build the screen the request describes, then save it. A short request is the subject ("pricing" builds a pricing screen).',
+  ...SHARED_GAME_RULES,
+  '- The viewport is a 470x470px square, not a desktop. Start from `*{box-sizing:border-box} body{margin:0;width:100vw;height:100vh;overflow:hidden;display:flex;flex-direction:column}` and lay out one screen that fits inside it: a single column, a sidebar becomes a top tab bar, tables show 3 columns at most, and only a list region scrolls when it overflows. No fixed widths wider than 100%.',
+  '- Use a deliberate palette in CSS custom properties, one system font stack, an 8px spacing scale, clear type hierarchy, rounded cards, subtle borders or shadows, and hover and focus states.',
+  '- Fill it with realistic sample data (names, amounts, dates, statuses). No lorem ipsum, no empty placeholder boxes. Draw icons and charts with CSS or inline SVG.',
+  '- Every button, tab, toggle, and input changes something visible: one inline <script> attaches a click listener to each control that toggles state, filters a list, or updates a number.',
+  '- Keep the document under about 24,000 characters so it fits the output limit in one save.',
+  '',
+  'Workflow:',
+  '1. Call save_game with a short kebab-case filename, the full document (including its <script> with the click listeners) as content, and an instructions field stating what the screen shows and what is interactive.',
+  '2. The result reports valid and issues. If issues are listed, fix them and call save_game again with the same filename. Finish only when valid is true.',
+  '3. Reply with the saved path and one line. Nothing else.',
+  BUDGET_RULE,
+].join('\n');
+
+/** Composer defaults for UI mode: the gateway's declared limits for `oui-1`. */
+export const UI_DEFAULTS = { model: 'oui-1', maxContextTokens: 16_384, maxOutputTokens: 8_192 } as const;
 
 export const DEFAULTS: AgentConfig = {
   apiKey: '',
@@ -88,6 +118,7 @@ export const DEFAULTS: AgentConfig = {
     'Rules:',
     '- Produce ONE self-contained .html file with inline CSS and vanilla JS. No build steps, no network, no frameworks, CDNs, npm installs, web fonts, or external media.',
     ...SHARED_GAME_RULES,
+    START_RULE,
     '- Save with save_game using a short kebab-case filename and concise controls/objective in its instructions field. Issue independent tool calls in parallel when possible.',
     '- After saving, call validate_game on the saved path. Do not finish until valid:true. If issues remain, read the file, fix, save, and re-validate.',
     '- Before saving, self-check: first interaction starts play, no network/storage/eval, body fills viewport, and overlays are dismissible.',

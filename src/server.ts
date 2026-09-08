@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { readFileSync } from 'node:fs';
-import { CREATE_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
+import { CREATE_SYSTEM_PROMPT, UI_DEFAULTS, UI_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
 import { runAgent } from './agent.js';
 import { CHARS_PER_TOKEN } from './tools.js';
 import { createGameStorage, GAME_FILENAME } from './storage.js';
@@ -42,6 +42,8 @@ const server = Bun.serve({
       return json({
         systemPrompt: defaults.systemPrompt,
         createSystemPrompt: CREATE_SYSTEM_PROMPT,
+        uiSystemPrompt: UI_SYSTEM_PROMPT,
+        ui: { ...UI_DEFAULTS, defaultPrompt: 'a spending summary card with a 7-day bar chart and a details button' },
         model: defaults.model,
         maxToolCalls: defaults.maxToolCalls,
         maxContextTokens: defaults.maxContextTokens,
@@ -54,8 +56,11 @@ const server = Bun.serve({
 
     if (url.pathname === '/api/models') {
       if (!modelsCache) {
-        const res = await fetch('https://openrouter.ai/api/v1/models');
-        if (!res.ok) return json({ error: `openrouter /v1/models returned ${res.status}` }, 502);
+        // The catalog comes from whichever endpoint serves generation, so a gateway's own aliases (e.g. oui-1) are listed.
+        const res = defaults.baseUrl
+          ? await fetch(defaults.baseUrl.replace(/\/$/, '') + '/models', { headers: { Authorization: `Bearer ${defaults.apiKey}` } })
+          : await fetch('https://openrouter.ai/api/v1/models');
+        if (!res.ok) return json({ error: `/v1/models returned ${res.status}` }, 502);
         modelsCache = await res.text();
       }
       return new Response(modelsCache, { headers: { 'content-type': 'application/json' } });

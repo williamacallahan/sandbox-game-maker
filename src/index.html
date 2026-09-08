@@ -140,6 +140,7 @@
       <div class="chips">
         <button class="chip on" data-mode="game" type="button">Game</button>
         <button class="chip" data-mode="create" type="button">Create</button>
+        <button class="chip" data-mode="ui" type="button">UI</button>
       </div>
       <label for="system">System prompt</label>
       <textarea id="system"></textarea>
@@ -272,16 +273,13 @@ function closeImprove() {
   improveOverlay.hidden = true;
   main.insertBefore(composer, main.firstChild);
   postBtn.textContent = 'Post';
-  postBtn.disabled = !promptEl.value.trim();
-  promptEl.value = cfg.defaultPrompt;
-  systemEl.value = cfg.systemPrompt;
-  for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxCost']) $('#' + key).value = cfg[key];
-  $('#maxOutputTokens').value = '';
+  promptEl.value = '';
+  for (const key of ['maxToolCalls', 'maxCost']) $('#' + key).value = cfg[key];
   $('#maxReasoningTokens').value = '';
-  $('#reasoningEffort').value = '';
   $('#filename').value = '';
   $('#filename').parentElement.style.display = '';
-  syncEfforts();
+  applyMode($('.chip.on').dataset.mode);
+  postBtn.disabled = !promptEl.value.trim();
 }
 
 function postCard(p) {
@@ -487,13 +485,20 @@ async function generate() {
 improveOverlay.addEventListener('click', (e) => { if (e.target === improveOverlay) closeImprove(); });
 $('#improve-cancel').addEventListener('click', closeImprove);
 
-document.querySelectorAll('.chip').forEach((chip) =>
-  chip.addEventListener('click', () => {
-    document.querySelectorAll('.chip').forEach((c) => c.classList.remove('on'));
-    chip.classList.add('on');
-    systemEl.value = chip.dataset.mode === 'create' ? cfg.createSystemPrompt : cfg.systemPrompt;
-  }),
-);
+// Each mode owns the system prompt, the example prompt, and (for UI) the model
+// and token limits, which follow the gateway's declared limits for oui-1.
+function applyMode(mode) {
+  document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.mode === mode));
+  const ui = mode === 'ui';
+  systemEl.value = ui ? cfg.uiSystemPrompt : mode === 'create' ? cfg.createSystemPrompt : cfg.systemPrompt;
+  $('#model').value = ui ? cfg.ui.model : cfg.model;
+  $('#maxContextTokens').value = ui ? cfg.ui.maxContextTokens : cfg.maxContextTokens;
+  $('#maxOutputTokens').value = ui ? cfg.ui.maxOutputTokens : '';
+  const [oldPrompt, newPrompt] = ui ? [cfg.defaultPrompt, cfg.ui.defaultPrompt] : [cfg.ui.defaultPrompt, cfg.defaultPrompt];
+  if (!promptEl.value.trim() || promptEl.value.trim() === oldPrompt) promptEl.value = newPrompt;
+  syncEfforts();
+}
+document.querySelectorAll('.chip').forEach((chip) => chip.addEventListener('click', () => applyMode(chip.dataset.mode)));
 promptEl.addEventListener('input', () => { postBtn.disabled = !promptEl.value.trim(); });
 postBtn.addEventListener('click', generate);
 promptEl.addEventListener('keydown', (e) => {
@@ -525,7 +530,11 @@ try {
   $('#model-list').innerHTML = m.data
     .map((x) => '<option value="' + esc(x.id) + '">' + esc(x.name ?? '') + '</option>')
     .join('');
-  for (const x of m.data) if (x.reasoning) modelReasoning.set(x.id, x.reasoning);
+  for (const x of m.data) {
+    // OpenRouter: x.reasoning; llm-gateway: x.capabilities.reasoning (effort_levels absent when unsupported).
+    const r = x.reasoning ?? (x.capabilities?.reasoning && { supported_efforts: x.capabilities.reasoning.effort_levels ?? [], default_effort: x.capabilities.reasoning.default_effort });
+    if (r) modelReasoning.set(x.id, r);
+  }
   if (cfg) syncEfforts();
 } catch {}
 
@@ -533,10 +542,8 @@ const feedPromise = loadFeed().catch((error) => {
   $('#feed').innerHTML = '<p class="error">Could not load games: ' + esc(error.message) + '</p>';
 });
 cfg = await fetch('/api/config').then((r) => r.json());
-systemEl.value = cfg.systemPrompt;
-promptEl.value = cfg.defaultPrompt;
-for (const key of ['model', 'maxToolCalls', 'maxContextTokens', 'maxCost']) $('#' + key).value = cfg[key];
-syncEfforts();
+for (const key of ['maxToolCalls', 'maxCost']) $('#' + key).value = cfg[key];
+applyMode('game');
 postBtn.disabled = false;
 await feedPromise;
 </script>

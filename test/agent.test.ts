@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { Budget, validateGameFile } from '../src/tools.js';
-import { CREATE_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
+import { CREATE_SYSTEM_PROMPT, UI_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
 
 describe('Budget', () => {
   test('enforces tool call limit', () => {
@@ -38,7 +38,7 @@ describe('loadConfig', () => {
 
   test('requires unobstructed games and dismissible overlays', () => {
     const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
-    for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT]) {
+    for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT, UI_SYSTEM_PROMPT]) {
       expect(prompt).toContain('game-maker:dismiss-overlay');
       expect(prompt).toContain('instructions field');
     }
@@ -97,5 +97,7 @@ describe('validateGameFile', () => {
     for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT]) {
       expect(prompt).toContain('validate_game');
     }
+    // UI mode reads the validation that save_game returns instead of a second tool call.
+    expect(UI_SYSTEM_PROMPT).toContain('Finish only when valid is true');
   });
 });
