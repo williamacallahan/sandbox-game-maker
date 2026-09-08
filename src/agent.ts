@@ -94,6 +94,9 @@ export async function runAgent(
   const savePrompt = options?.savePrompt ?? (typeof input === 'string' ? input : input.findLast((message) => message.role === 'user')?.content ?? '');
   let providerFromHeaders: string | null = null;
   let upstreamCost: number | null = null;
+  // Running totals from onTurnEnd, so a run that fails after save_game still records its usage.
+  const turnTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reasoningTokens: 0, cost: 0, costSeen: false };
+  let statsSaved = false;
   const headers: Record<string, string> = cacheKey ? { 'X-LGW-Cache-Key': cacheKey } : { 'X-OpenRouter-Metadata': 'enabled' };
   const responseHook: AfterSuccessHook = {
     afterSuccess: (_ctx, response) => {
@@ -154,6 +157,13 @@ export async function runAgent(
         const upstream = u?.costDetails?.upstreamInferenceCost;
         if (upstream != null) {
           upstreamCost = (upstreamCost ?? 0) + upstream;
+        }
+        if (u) {
+          turnTotals.inputTokens += u.inputTokens;
+          turnTotals.outputTokens += u.outputTokens;
+          turnTotals.totalTokens += u.totalTokens;
+          turnTotals.reasoningTokens += u.outputTokensDetails?.reasoningTokens ?? 0;
+          if (u.cost != null) { turnTotals.cost += u.cost; turnTotals.costSeen = true; }
         }
         if (u && options?.onEvent) {
           const provider = providerFromMeta(response.openrouterMetadata) ?? providerFromHeaders;
@@ -226,6 +236,7 @@ export async function runAgent(
       const streamTools = async () => {
         for await (const item of result.getItemsStream()) {
           if (options?.signal?.aborted) break;
+          firstTokenAt ??= Date.now();
           if (item.type === 'function_call') {
             callNames.set(item.callId, item.name);
             if (item.status === 'completed') {
@@ -275,34 +286,53 @@ export async function runAgent(
       }
     }
     const generation = !config.baseUrl && response.id ? await fetchGeneration(client, response.id, headers) : null;
-    const stats: RunStats = {
-      provider:
-        providerFromMeta(response.openrouterMetadata) ??
-        providerFromHeaders ??
-        generation?.providerName ??
-        null,
-      tokensPerSec:
+    const stats = buildStats({
+      provider: providerFromMeta(response.openrouterMetadata) ?? providerFromHeaders ?? generation?.providerName ?? null,
+      reportedTokensPerSec:
         generation?.generationTime && generation.nativeTokensCompletion
           ? Math.round((generation.nativeTokensCompletion / generation.generationTime) * 1000)
           : null,
-      ttftMs: firstTokenAt ? firstTokenAt - startedAt : null,
-      inputTokens: totals.inputTokens,
-      outputTokens: totals.outputTokens,
-      totalTokens: totals.totalTokens,
-      reasoningTokens: totals.reasoningTokens,
-      toolCalls: budget.callCount,
-      durationMs,
+      usage: totals,
       cost: gatewayCost ?? totals.cost ?? null,
-      upstreamCost: upstreamCost ?? null,
-    };
-    if (savedPosts.length) {
-      await storage.saveStats(runId, stats);
-      for (const post of savedPosts) post.stats = stats;
-    }
+    });
+    await persistStats(stats);
     const text = textChunks.join('') || (response.outputText ?? '');
     options?.onEvent?.({ type: 'done', durationMs, stats });
     return { text, output: response.output, durationMs, stats, savedPosts };
+  } catch (error) {
+    // The file is already in the gallery; keep the usage we saw instead of leaving its Details empty.
+    if (savedPosts.length && !statsSaved) {
+      const stats = buildStats({ provider: providerFromHeaders, reportedTokensPerSec: null, usage: turnTotals, cost: turnTotals.costSeen ? turnTotals.cost : null });
+      await persistStats(stats).catch((cause) => console.error(`Could not save run stats: ${cause instanceof Error ? cause.message : String(cause)}`));
+    }
+    throw error;
   } finally {
     options?.signal?.removeEventListener('abort', onAbort);
+  }
+
+  function buildStats(parts: { provider: string | null; reportedTokensPerSec: number | null; usage: BaseUsage & { reasoningTokens: number }; cost: number | null }): RunStats {
+    const durationMs = Date.now() - startedAt;
+    const decodeSeconds = firstTokenAt ? (Date.now() - firstTokenAt) / 1000 : 0;
+    return {
+      provider: parts.provider,
+      // OpenRouter reports decode speed; gateways do not, so estimate output tokens over the streamed span (includes tool time).
+      tokensPerSec: parts.reportedTokensPerSec ?? (decodeSeconds > 0 && parts.usage.outputTokens ? Math.round(parts.usage.outputTokens / decodeSeconds) : null),
+      ttftMs: firstTokenAt ? firstTokenAt - startedAt : null,
+      inputTokens: parts.usage.inputTokens,
+      outputTokens: parts.usage.outputTokens,
+      totalTokens: parts.usage.totalTokens,
+      reasoningTokens: parts.usage.reasoningTokens,
+      toolCalls: budget.callCount,
+      durationMs,
+      cost: parts.cost,
+      upstreamCost: upstreamCost ?? null,
+    };
+  }
+
+  async function persistStats(stats: RunStats) {
+    if (!savedPosts.length) return;
+    await storage.saveStats(runId, stats);
+    statsSaved = true;
+    for (const post of savedPosts) post.stats = stats;
   }
 }
