@@ -285,6 +285,16 @@ function closeImprove() {
   postBtn.disabled = !promptEl.value.trim();
 }
 
+// The parts of a card that belong to one stored version: time, instructions, settings/stats, caption.
+function fillMeta(card, p) {
+  $('.who small', card).textContent = timeAgo(p.ts);
+  $('.how-panel p', card).textContent = p.instructions ?? 'No instructions were recorded for this game.';
+  $('.settings-panel', card).innerHTML = detailsPanel(p);
+  const terminalSuffix = p.file.endsWith('.js') ? ' · terminal game' : '';
+  $('.caption', card).innerHTML = '<b>' + esc(p.file) + '</b>' + esc(p.prompt) +
+    (p.model ? '<span class="model">' + esc(p.model) + terminalSuffix + '</span>' : '');
+}
+
 function postCard(p) {
   const card = document.createElement('article');
   card.className = 'card';
@@ -294,36 +304,40 @@ function postCard(p) {
   // .js terminal games play in the page via the server's ?play xterm runner.
   const src = '/games/' + p.file + (isJs ? '?play=1' : '');
   const media = '<div class="media"><iframe src="' + src + '" sandbox="allow-scripts" loading="lazy" tabindex="0" title="' + esc(name) + '"></iframe></div>';
-  const terminalSuffix = isJs ? ' · terminal game' : '';
-  const modelTag = p.model ? '<span class="model">' + esc(p.model) + terminalSuffix + '</span>' : '';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
-    '<div class="who"><b>' + esc(name) + '</b><small>' + timeAgo(p.ts) + '</small></div>' +
+    '<div class="who"><b>' + esc(name) + '</b><small></small></div>' +
     '<div class="head-actions"><button class="expand-btn how-btn" type="button" aria-expanded="false">How to play</button>' +
     '<button class="expand-btn details-btn" type="button" aria-expanded="false">Details</button></div></div>' +
-    '<div class="detail-panel how-panel" hidden><p>' + esc(p.instructions ?? 'No instructions were recorded for this game.') + '</p>' +
+    '<div class="detail-panel how-panel" hidden><p></p>' +
     '<button class="dismiss-overlay" type="button">Dismiss game overlay</button></div>' +
-    '<div class="detail-panel settings-panel" hidden>' + detailsPanel(p) + '</div>' +
+    '<div class="detail-panel settings-panel" hidden></div>' +
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
     '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a>' +
     '<button class="improve" type="button" title="improve this game">Improve</button>' +
     '<select class="versions" title="version history" hidden><option>Versions</option></select></div>' +
-    '<div class="caption"><b>' + esc(name) + '</b>' + esc(p.prompt) + modelTag + '</div>';
+    '<div class="caption"></div>';
+  // The version shown right now; the select swaps both the file and this metadata.
+  let current = p;
+  fillMeta(card, current);
   const iframe = $('iframe', card);
   for (const ev of ['mouseenter', 'click']) {
     iframe.addEventListener(ev, () => { try { iframe.contentWindow?.focus(); } catch {} });
   }
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
-  $('.improve', card).addEventListener('click', () => openImprove(p.file, p));
+  $('.improve', card).addEventListener('click', () => openImprove(p.file, current));
   const versionsSelect = $('.versions', card);
-  versionsSelect.addEventListener('change', () => {
+  versionsSelect.addEventListener('change', async () => {
     const versionId = versionsSelect.value;
-    if (isJs) {
-      iframe.src = '/games/' + p.file + '?play=1' + (versionId ? '&versionId=' + encodeURIComponent(versionId) : '');
-    } else {
-      iframe.src = '/games/' + p.file + (versionId ? '?versionId=' + encodeURIComponent(versionId) : '');
-    }
+    const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';
+    iframe.src = '/games/' + p.file + (isJs ? '?play=1' + (query && '&' + query) : (query && '?' + query));
+    try {
+      const res = await fetch('/api/post/' + encodeURIComponent(p.file) + (query && '?' + query));
+      if (!res.ok) throw new Error(res.statusText);
+      current = await res.json();
+      fillMeta(card, current);
+    } catch {}
   });
   loadVersions(p.file, versionsSelect);
   for (const [buttonSelector, panelSelector] of [

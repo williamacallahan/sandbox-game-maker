@@ -9,6 +9,7 @@ const defaults = loadConfig({}, { skipApiKey: true });
 const storage = createGameStorage(defaults.outDir);
 const GAME_URL = /^\/games\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
 const VERSION_URL = /^\/api\/versions\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
+const POST_URL = /^\/api\/post\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
 
 // ponytail: cached for the server's lifetime; restart to refresh the model list.
 let modelsCache: string | null = null;
@@ -78,6 +79,17 @@ const server = Bun.serve({
     if (version && req.method === 'GET') {
       try {
         return json(await storage.versions(version[1]));
+      } catch (error) {
+        if (isMissing(error)) return new Response('not found', { status: 404 });
+        return json({ error: errorMessage(error) }, 502);
+      }
+    }
+
+    // Metadata (prompt, instructions, settings, stats) for one stored version of a game.
+    const postMatch = POST_URL.exec(url.pathname);
+    if (postMatch && req.method === 'GET') {
+      try {
+        return json((await storage.read(postMatch[1], url.searchParams.get('versionId') ?? undefined)).post);
       } catch (error) {
         if (isMissing(error)) return new Response('not found', { status: 404 });
         return json({ error: errorMessage(error) }, 502);
