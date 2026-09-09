@@ -408,7 +408,7 @@ function postCard(p) {
   const selectedVersion = () => (versionsSelect.hidden ? '' : versionsSelect.value);
   // After a delete or a promotion the newest version is current: reload the list and show it as Latest.
   const showLatest = async () => {
-    await loadVersions(p.file, versionsSelect);
+    await loadVersions(p.file, versionsSelect, card);
     versionsSelect.value = '';
     versionsSelect.dispatchEvent(new Event('change'));
   };
@@ -460,7 +460,7 @@ function postCard(p) {
       fillMeta(card, current);
     } catch {}
   });
-  loadVersions(p.file, versionsSelect);
+  loadVersions(p.file, versionsSelect, card);
   for (const [buttonSelector, panelSelector] of [
     ['.how-btn', '.how-panel'],
     ['.details-btn', '.settings-panel'],
@@ -483,7 +483,7 @@ async function loadFeed(reset = false) {
   feedLoading = true;
   const response = await fetch('/api/feed?limit=10' + (reset ? '' : feedCursor ? '&cursor=' + encodeURIComponent(feedCursor) : ''));
   const page = await response.json();
-  if (!response.ok) throw new Error(page.error ?? response.statusText);
+  if (!response.ok) { feedLoading = false; throw new Error(page.error ?? response.statusText); }
   const feed = $('#feed');
   if (reset) { feed.innerHTML = ''; feedCursor = null; }
   if (!page.posts.length && !feed.querySelector('article')) feed.innerHTML = '<p class="empty">no creations yet — post one above</p>';
