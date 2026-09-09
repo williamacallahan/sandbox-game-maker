@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { CREATE_SYSTEM_PROMPT, UI_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
@@ -53,7 +53,9 @@ describe('POST /api/generate (Improve)', () => {
 
   beforeAll(async () => {
     dir = await mkdtemp(join(tmpdir(), 'game-server-'));
-    await createGameStorage(join(dir, 'games')).save('poster.html', SOURCE, { prompt: 'a poster', model: 'm', ts: 1, instructions: 'Look at it.' });
+    const storage = createGameStorage(join(dir, 'games'));
+    await storage.save('poster.html', SOURCE, { prompt: 'a poster', model: 'm', ts: 1, instructions: 'Look at it.' });
+    await storage.save('cached-feed.html', SOURCE, { prompt: 'cached feed prompt', model: 'm', ts: 2, instructions: 'Look at it.' });
     const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GAME_STORAGE_')));
     server = Bun.spawn(['bun', resolve('src/server.ts')], {
       cwd: dir,
@@ -129,6 +131,21 @@ describe('POST /api/generate (Improve)', () => {
     expect(policy).toContain('sandbox allow-scripts;');
     expect(policy).toContain("connect-src 'none'");
     expect(policy).not.toContain('allow-same-origin');
+  });
+
+  test('GET /api/feed reuses cached summaries', async () => {
+    const first = await fetch(`${base}/api/feed?limit=10`);
+    expect(first.status).toBe(200);
+    expect((await first.json()).posts).toContainEqual(expect.objectContaining({ file: 'cached-feed.html', prompt: 'cached feed prompt' }));
+
+    const recordPath = join(dir, 'games', '.records', 'cached-feed.html.json');
+    const record = JSON.parse(await readFile(recordPath, 'utf8'));
+    record.post.prompt = 'changed outside storage';
+    await writeFile(recordPath, JSON.stringify(record));
+
+    const second = await fetch(`${base}/api/feed?limit=10`);
+    expect(second.status).toBe(200);
+    expect((await second.json()).posts).toContainEqual(expect.objectContaining({ file: 'cached-feed.html', prompt: 'cached feed prompt' }));
   });
 
   test('preserves custom Improve model and system prompt', async () => {

@@ -300,7 +300,7 @@ async function loadVersions(file, select, card) {
     ? versions.map((v, i) => {
       const when = new Date(v.lastModified).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       const label = (i === 0 ? 'Latest · ' : '') + when + ' · ' + String(v.eTag ?? '').slice(0, 6);
-      return '<option value="' + (i === 0 ? '' : esc(v.versionId)) + '">' + esc(label) + '</option>';
+      return '<option value="' + (i === 0 ? '' : esc(v.versionId)) + '" data-version-id="' + esc(v.versionId) + '">' + esc(label) + '</option>';
     }).join('')
     : '<option value="">Current version</option>';
   select.hidden = versions.length < 2;
@@ -383,7 +383,7 @@ function postCard(p) {
   const isJs = name.endsWith('.js');
   const unavailable = p.unavailable === true;
   // .js terminal games play in the page via the server's ?play xterm runner.
-  const src = '/games/' + p.file + (isJs ? '?play=1' : '');
+  const src = gameUrl(p.file);
   const media = '<div class="media" data-game-media>' + (unavailable ? '<div class="placeholder"><div class="placeholder-icon">⚠️</div><b>Creation unavailable</b><small>Use Details or Improve to retry metadata.</small></div>' : '<iframe class="game-frame" loading="lazy" sandbox="allow-scripts" title="' + esc(name) + '" data-src="' + esc(src) + '"></iframe>') + '</div>';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
@@ -395,7 +395,7 @@ function postCard(p) {
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
     (unavailable ? '' : '<button class="play-link" type="button" title="focus game in viewport">' + OPEN + ' Play</button>') +
-    '<button class="history" type="button" title="load version history">History</button>' +
+    '<button class="history" type="button" title="load version history" aria-expanded="false">History</button>' +
     '<button class="improve" type="button" title="improve this game">Improve</button>' +
     '<button class="delete" type="button" title="delete this version">Delete</button>' +
     '<button class="set-current" type="button" title="make this version the one the feed shows" hidden>Set as current</button>' +
@@ -432,7 +432,22 @@ function postCard(p) {
 
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   const versionsSelect = $('.versions', card);
-  const selectedVersion = () => (versionsSelect.hidden ? '' : versionsSelect.value);
+  const historyButton = $('.history', card);
+  let historyLoad;
+  const selectedVersion = () => versionsSelect.value;
+  const selectedVersionId = () => versionsSelect.options[versionsSelect.selectedIndex]?.dataset.versionId ?? '';
+  const showHistory = () => {
+    const hasHistory = versionsSelect.options.length > 1;
+    versionsSelect.hidden = !hasHistory;
+    historyButton.textContent = hasHistory ? 'History' : 'No history';
+    historyButton.disabled = !hasHistory;
+    historyButton.setAttribute('aria-expanded', String(hasHistory));
+  };
+  const ensureVersions = () => {
+    if (card._historyLoaded) return Promise.resolve();
+    historyLoad ??= loadVersions(p.file, versionsSelect, card).finally(() => { historyLoad = undefined; });
+    return historyLoad;
+  };
   const loadCurrentPost = async () => {
     const sequence = ++card._metaSeq;
     const versionId = selectedVersion();
@@ -447,9 +462,20 @@ function postCard(p) {
   // After a delete or a promotion the newest version is current: reload the list and show it as Latest.
   const showLatest = async () => {
     await loadVersions(p.file, versionsSelect, card);
+    showHistory();
     versionsSelect.value = '';
     versionsSelect.dispatchEvent(new Event('change'));
   };
+  historyButton.addEventListener('click', async () => {
+    historyButton.disabled = true;
+    try {
+      await ensureVersions();
+      showHistory();
+    } catch (error) {
+      historyButton.disabled = false;
+      alert('Could not load version history: ' + error.message);
+    }
+  });
   // Improve the version on screen, not silently the latest one.
   $('.improve', card).addEventListener('click', async (event) => {
     const button = event.currentTarget;
@@ -461,14 +487,25 @@ function postCard(p) {
     finally { button.disabled = false; }
   });
   $('.delete', card).addEventListener('click', async () => {
-    const versionId = selectedVersion();
-    const onlyVersion = versionsSelect.hidden || versionsSelect.options.length <= 1;
+    try {
+      await ensureVersions();
+      showHistory();
+    } catch (error) {
+      alert('Could not load version history: ' + error.message);
+      return;
+    }
+    const versionId = selectedVersionId();
+    const onlyVersion = versionsSelect.options.length <= 1;
+    if (!onlyVersion && !versionId) {
+      alert('Could not determine the selected version.');
+      return;
+    }
     const what = onlyVersion
       ? 'Delete ' + p.file + '? It has no other versions, so the whole card goes away.'
       : 'Delete the version "' + versionsSelect.options[versionsSelect.selectedIndex].textContent + '" of ' + p.file + '?';
     if (!await confirmDialog(what)) return;
     try {
-      const res = await fetch('/api/versions/' + encodeURIComponent(p.file) + (onlyVersion || !versionId ? '' : '?versionId=' + encodeURIComponent(versionId)), { method: 'DELETE' });
+      const res = await fetch('/api/versions/' + encodeURIComponent(p.file) + (onlyVersion ? '' : '?versionId=' + encodeURIComponent(versionId)), { method: 'DELETE' });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? res.statusText);
       if (body.remaining === 0) { card._dispose(); card.remove(); if (!$('#feed article')) $('#feed').innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
@@ -496,15 +533,13 @@ function postCard(p) {
   versionsSelect.addEventListener('change', async () => {
     const versionId = versionsSelect.value;
     setCurrent.hidden = !versionId;
-    const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';
-    if (frame) frame.dataset.src = '/games/' + p.file + (isJs ? '?play=1' + (query && '&' + query) : (query && '?' + query));
+    if (frame) frame.dataset.src = gameUrl(p.file, versionId);
     sleep();
     wake();
     try {
       await loadCurrentPost();
     } catch {}
   });
-  loadVersions(p.file, versionsSelect, card);
   for (const [buttonSelector, panelSelector] of [
     ['.how-btn', '.how-panel'],
     ['.details-btn', '.settings-panel'],

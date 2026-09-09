@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { CREATE_SYSTEM_PROMPT, UI_DEFAULTS, UI_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig, type AgentMode } from './config.js';
 import { runAgent } from './agent.js';
 import { CHARS_PER_TOKEN } from './tools.js';
-import { createGameStorage, GAME_FILENAME, paginateFeed, parseFeedLimit } from './storage.js';
+import { createGameStorage, GAME_FILENAME, parseFeedLimit } from './storage.js';
 
 const defaults = loadConfig({}, { skipApiKey: true });
 const storage = createGameStorage(defaults.outDir);
@@ -74,7 +74,7 @@ const server = Bun.serve({
     if (url.pathname === '/api/feed') {
       try {
         const limit = url.searchParams.get('limit') ? parseFeedLimit(url.searchParams.get('limit')!) : 10;
-        return json(paginateFeed((await storage.list()).filter((post): post is typeof post & { file: string } => Boolean(post.file)).map(({ file, prompt, model, ts }) => ({ file, prompt, model, ts })), { limit, cursor: url.searchParams.get('cursor') ?? undefined }));
+        return json(await storage.listFeed({ limit, cursor: url.searchParams.get('cursor') ?? undefined }));
       } catch (error) {
         return json({ error: errorMessage(error) }, 502);
       }
