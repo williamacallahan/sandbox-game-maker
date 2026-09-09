@@ -199,6 +199,10 @@ export function validateGameContent(path: string, content: string): { valid: boo
     issues.push('File is empty.');
     return { valid: false, issues };
   }
+  // ponytail: one-line document plus literal \n means the model re-encoded a JSON string as the file.
+  if (!content.includes('\n') && content.includes('\\n')) {
+    issues.push('Content is a JSON-escaped string (literal \\n and \\" sequences), not the document itself: pass the raw file text as content.');
+  }
   if (path.endsWith('.html')) {
     validateHtmlGame(content, issues);
   } else if (path.endsWith('.js')) {

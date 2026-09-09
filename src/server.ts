@@ -179,7 +179,7 @@ const server = Bun.serve({
 
       let fullPrompt: string;
       if (existingFile) {
-        let existing: { post: { prompt: string; instructions?: string } };
+        let existing: { content: string; post: { prompt: string; instructions?: string } };
         try {
           existing = await storage.read(existingFile);
         } catch (error) {
@@ -187,7 +187,9 @@ const server = Bun.serve({
           throw error;
         }
         const originalInstructions = existing.post.instructions ?? 'none';
-        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nStart by using read_file to inspect the current source. Then apply this change request and overwrite the same file with save_game (use the same filename "${existingFile}"). Validate the result with validate_game before finishing.\n\nChange request: ${prompt}`;
+        // The source goes in the prompt as plain text. A read_file result is a JSON string, and small models
+        // (oui-1) copy its \n and \" escapes into save_game content verbatim, saving an unrenderable document.
+        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nIts complete current source follows; do not call read_file.\n\n${existing.content}\n\nApply this change request to that source and overwrite the same file with save_game (use the same filename "${existingFile}" and pass the whole updated document as content). Validate the result with validate_game before finishing.\n\nChange request: ${prompt}`;
       } else {
         fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
       }

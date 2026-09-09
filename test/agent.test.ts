@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Budget, validateGameFile } from '../src/tools.js';
+import { Budget, validateGameContent, validateGameFile } from '../src/tools.js';
 import { CREATE_SYSTEM_PROMPT, GATEWAY_DEFAULT_MODEL, UI_SYSTEM_PROMPT, loadConfig } from '../src/config.js';
 
 describe('Budget', () => {
@@ -91,6 +91,13 @@ describe('validateGameFile', () => {
     const { valid, issues } = await validateGameFile('test/fixtures/bad-overlay.html');
     expect(valid).toBe(false);
     expect(issues.some((i) => i.includes('data-game-overlay'))).toBe(true);
+  });
+
+  test('rejects a document saved as its JSON-escaped string', async () => {
+    const raw = await Bun.file('test/fixtures/good-game.html').text();
+    const escaped = JSON.stringify(raw).slice(1, -1);
+    expect(validateGameContent('games/good-game.html', escaped).issues.some((i) => i.includes('JSON-escaped'))).toBe(true);
+    expect(validateGameContent('games/good-game.html', raw).valid).toBe(true);
   });
 
   test('prompts require post-save validation', () => {
