@@ -108,4 +108,14 @@ describe('validateGameFile', () => {
     // UI mode reads the validation that save_game returns instead of a second tool call.
     expect(UI_SYSTEM_PROMPT).toContain('Finish only when valid is true');
   });
+
+  test('keeps mode-specific rendering and metadata rules in all three templates', () => {
+    const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
+    expect(gamePrompt).toContain('Initialize game state and the first render');
+    expect(gamePrompt).toContain('visible gameplay element and meter');
+    expect(CREATE_SYSTEM_PROMPT).toContain('interactive creative works');
+    expect(CREATE_SYSTEM_PROMPT).toContain('save_game instructions metadata');
+    expect(UI_SYSTEM_PROMPT).toContain('Render every chart on initialization');
+    expect(UI_SYSTEM_PROMPT).toContain('never read the global `event` object');
+  });
 });
