@@ -7,7 +7,7 @@ import type { OpenRouterMetadata } from '@openrouter/sdk/models/openroutermetada
 import { unwrapAsync } from '@openrouter/sdk/types/fp.js';
 import { z } from 'zod';
 import type { AgentConfig } from './config.js';
-import { Budget, makeTools } from './tools.js';
+import { Budget, CHARS_PER_TOKEN, makeTools } from './tools.js';
 import { createGameStorage, type GameStorage, type Post } from './storage.js';
 
 export type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
@@ -204,6 +204,7 @@ export async function runAgent(
   // stream dry, so getResponse().outputText ends up empty. We accumulate
   // text deltas here as a source of truth for the final text.
   const textChunks: string[] = [];
+  let reasoningChars = 0;
   let firstTokenAt: number | null = null;
 
   try {
@@ -220,6 +221,7 @@ export async function runAgent(
         for await (const delta of result.getReasoningStream()) {
           if (options?.signal?.aborted) break;
           firstTokenAt ??= Date.now();
+          reasoningChars += delta.length;
           options.onEvent!({ type: 'reasoning', delta });
         }
       };
@@ -292,7 +294,7 @@ export async function runAgent(
         generation?.generationTime && generation.nativeTokensCompletion
           ? Math.round((generation.nativeTokensCompletion / generation.generationTime) * 1000)
           : null,
-      usage: totals,
+      usage: { ...totals, reasoningTokens: totals.reasoningTokens || Math.ceil(reasoningChars / CHARS_PER_TOKEN) },
       cost: gatewayCost ?? totals.cost ?? null,
     });
     await persistStats(stats);
