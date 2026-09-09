@@ -273,6 +273,7 @@ function slugFilename(text: string): string {
 /** Tools close over the run's budget, so build them per run. */
 export function makeTools(config: AgentConfig, budget: Budget, options: MakeToolsOptions = {}) {
   const storage = options.storage ?? createGameStorage(config.outDir);
+  const examplePath = `${config.outDir}/${options.wantedFilename ?? 'my-game.html'}`;
   const saveMetadata = options.saveMetadata ?? (() => ({ prompt: '', model: config.model, ts: Date.now() }));
   // Names this run already saved (requested → stored), so a fix-and-resave overwrites instead of forking "-2".
   const ownNames = new Map<string, string>();
@@ -317,7 +318,7 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
       name: 'validate_game',
       description: 'Check a saved game for static format and policy issues (for example external resources, overlay wiring, and input-handler presence). It cannot prove runtime behavior; use browser testing for that. Call this after every save_game and fix any reported issues before replying.',
       inputSchema: z.object({
-        path: z.string().describe('Path to the saved game, e.g. "games/bunnies.html"'),
+        path: z.string().describe(`Path returned by save_game, for example ${examplePath}`),
       }),
       execute: async ({ path }) => {
         const limit = budget.take();
@@ -337,7 +338,7 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
       name: 'read_file',
       description: 'Read a previously saved game file (e.g. to iterate on it). Output capped at 2000 lines.',
       inputSchema: z.object({
-        path: z.string().describe('Path to the file, e.g. "games/snake.html"'),
+        path: z.string().describe(`Path returned by save_game, for example ${examplePath}`),
       }),
       execute: async ({ path }) => {
         const limit = budget.take();
@@ -386,7 +387,7 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
       name: 'edit_game',
       description: `Apply one exact text replacement to an existing game in ${config.outDir}/. The old_text must occur exactly once; the reconstructed file passes static validation before it overwrites the same game. This cannot prove runtime behavior; use browser testing for that.`,
       inputSchema: z.object({
-        path: z.string().describe('Path to the saved game, e.g. "games/bunnies.html"'),
+        path: z.string().describe(`Path returned by save_game, for example ${examplePath}`),
         old_text: z.string().min(1).describe('Non-empty text that must occur exactly once'),
         new_text: z.string().describe('Replacement text'),
       }),
