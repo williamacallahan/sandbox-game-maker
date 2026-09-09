@@ -100,9 +100,10 @@
   .stream .tool { color: #7ab8ff; }
   .stream:empty { display: none; }
 
-  /* posts stay cheap in the root document; creations run only in a new tab. */
+  /* Keep only visible creations alive; each game runs in its own sandboxed iframe. */
   .feed-card { content-visibility: auto; contain-intrinsic-size: auto 520px; }
   .media { aspect-ratio: 1 / .68; display: grid; place-items: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: linear-gradient(145deg, #fcf6ff 0%, #f5f8ff 48%, #fff9f1 100%); }
+  .game-frame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
   .placeholder { display: grid; place-items: center; gap: 10px; color: #4d4b63; text-align: center; }
   .placeholder-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #fff; box-shadow: 0 8px 24px rgba(66, 58, 105, .12); font-size: 30px; }
   .placeholder small { color: var(--muted); }
@@ -382,7 +383,7 @@ function postCard(p) {
   const unavailable = p.unavailable === true;
   // .js terminal games play in the page via the server's ?play xterm runner.
   const src = '/games/' + p.file + (isJs ? '?play=1' : '');
-  const media = '<div class="media"><div class="placeholder"><div class="placeholder-icon">' + (unavailable ? '⚠️' : (isJs ? '⌨️' : '🕹️')) + '</div><b>' + (unavailable ? 'Creation unavailable' : 'Open to play') + '</b><small>' + (unavailable ? 'Use Details or Improve to retry metadata.' : 'Runs in an isolated tab') + '</small></div></div>';
+  const media = '<div class="media" data-game-media>' + (unavailable ? '<div class="placeholder"><div class="placeholder-icon">⚠️</div><b>Creation unavailable</b><small>Use Details or Improve to retry metadata.</small></div>' : '<iframe class="game-frame" loading="lazy" sandbox="allow-scripts" title="' + esc(name) + '" data-src="' + esc(src) + '"></iframe>') + '</div>';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
     '<div class="who"><b>' + esc(name) + '</b><small></small></div>' +
@@ -392,7 +393,7 @@ function postCard(p) {
     '<div class="detail-panel settings-panel" hidden></div>' +
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
-    (unavailable ? '' : '<a class="play-link" href="' + src + '" target="_blank" rel="noopener noreferrer" title="open game in isolated tab">' + OPEN + ' Play / Open</a>') +
+    (unavailable ? '' : '<button class="play-link" type="button" title="focus game in viewport">' + OPEN + ' Play</button>') +
     '<button class="history" type="button" title="load version history">History</button>' +
     '<button class="improve" type="button" title="improve this game">Improve</button>' +
     '<button class="delete" type="button" title="delete this version">Delete</button>' +
@@ -402,6 +403,15 @@ function postCard(p) {
   // The version shown right now; the select swaps both the file and this metadata.
   let current = p;
   fillMeta(card, current);
+
+  const frame = $('.game-frame', card);
+  if (frame) {
+    const wake = () => { if (!frame.src) frame.src = frame.dataset.src; };
+    const sleep = () => { if (frame.src) frame.removeAttribute('src'); };
+    const visibility = new IntersectionObserver(([entry]) => entry.isIntersecting ? wake() : sleep(), { rootMargin: '220px 0px' });
+    visibility.observe(card);
+    $('.play-link', card).addEventListener('click', () => { wake(); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+  }
 
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   const versionsSelect = $('.versions', card);
