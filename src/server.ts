@@ -161,6 +161,7 @@ const server = Bun.serve({
       if (existingFile && !GAME_FILENAME.test(existingFile)) {
         return json({ error: `existingFile must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
       }
+      const existingVersionId = typeof body.existingVersionId === 'string' && body.existingVersionId.trim() ? body.existingVersionId.trim() : undefined;
       const wantedFile = typeof body.filename === 'string' && body.filename.trim() ? body.filename.trim() : null;
       if (wantedFile && !GAME_FILENAME.test(wantedFile)) {
         return json({ error: `filename must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
@@ -181,10 +182,10 @@ const server = Bun.serve({
       if (existingFile) {
         let existing: { content: string; post: { prompt: string; instructions?: string } };
         try {
-          existing = await storage.read(existingFile);
+          existing = await storage.read(existingFile, existingVersionId);
         } catch (error) {
           if (isMissing(error)) return json({ error: `game not found: ${existingFile}` }, 404);
-          throw error;
+          return json({ error: errorMessage(error) }, 502);
         }
         const originalInstructions = existing.post.instructions ?? 'none';
         // The source goes in the prompt as plain text. A read_file result is a JSON string, and small models

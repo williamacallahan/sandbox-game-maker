@@ -188,7 +188,7 @@ const promptEl = $('#prompt'), systemEl = $('#system'), postBtn = $('#post-btn')
 const main = $('main'), composer = $('.composer'), improveOverlay = $('#improve-overlay');
 const improveHost = $('#improve-composer-host'), improveTitle = $('#improve-title');
 let cfg = null;
-let improveFile = null;
+let improveFile = null, improveVersionId = '';
 
 const HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>';
 const OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
@@ -270,8 +270,9 @@ function confirmDialog(text) {
   return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), { once: true }));
 }
 
-function openImprove(file, p) {
+function openImprove(file, p, versionId) {
   improveFile = file;
+  improveVersionId = versionId;
   improveTitle.textContent = 'Improve ' + file;
   improveHost.append(composer);
   promptEl.value = '';
@@ -348,10 +349,12 @@ function postCard(p) {
     iframe.addEventListener(ev, () => { try { iframe.contentWindow?.focus(); } catch {} });
   }
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
-  $('.improve', card).addEventListener('click', () => openImprove(p.file, current));
   const versionsSelect = $('.versions', card);
+  const selectedVersion = () => (versionsSelect.hidden ? '' : versionsSelect.value);
+  // Improve the version on screen, not silently the latest one.
+  $('.improve', card).addEventListener('click', () => openImprove(p.file, current, selectedVersion()));
   $('.delete', card).addEventListener('click', async () => {
-    const versionId = versionsSelect.hidden ? '' : versionsSelect.value;
+    const versionId = selectedVersion();
     const onlyVersion = versionsSelect.hidden || versionsSelect.options.length <= 1;
     const what = onlyVersion
       ? 'Delete ' + p.file + '? It has no other versions, so the whole card goes away.'
@@ -521,7 +524,7 @@ async function generate() {
         maxCost: $('#maxCost').value,
         reasoningEffort: $('#reasoningEffort').value,
         filename: $('#filename').value.trim(),
-        ...(improveFile && { existingFile: improveFile }),
+        ...(improveFile && { existingFile: improveFile, existingVersionId: improveVersionId }),
       }),
     });
     if (!res.ok) {
