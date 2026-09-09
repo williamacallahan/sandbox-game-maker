@@ -474,6 +474,7 @@ function postCard(p) {
     }
   });
   versionsSelect.addEventListener('change', async () => {
+    const sequence = ++card._metaSeq;
     const versionId = versionsSelect.value;
     setCurrent.hidden = !versionId;
     const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';
@@ -483,7 +484,9 @@ function postCard(p) {
     try {
       const res = await fetch('/api/post/' + encodeURIComponent(p.file) + (query && '?' + query));
       if (!res.ok) throw new Error(res.statusText);
-      current = await res.json();
+      const post = await res.json();
+      if (sequence !== card._metaSeq || !card.isConnected) return;
+      current = post;
       fillMeta(card, current);
     } catch {}
   });
