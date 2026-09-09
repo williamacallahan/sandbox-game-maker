@@ -215,7 +215,7 @@ const promptEl = $('#prompt'), systemEl = $('#system'), postBtn = $('#post-btn')
 const main = $('main'), composer = $('.composer'), improveOverlay = $('#improve-overlay');
 const improveHost = $('#improve-composer-host'), improveTitle = $('#improve-title');
 let cfg = null;
-let improveFile = null, improveVersionId = '', modeExplicit = false;
+let improveFile = null, improveVersionId = '';
 
 const HEART = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>';
 const OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
@@ -320,7 +320,6 @@ function confirmDialog(text) {
 function openImprove(file, p, versionId) {
   improveFile = file;
   improveVersionId = versionId;
-  modeExplicit = true;
   improveTitle.textContent = 'Improve ' + file;
   improveHost.append(composer);
   promptEl.value = '';
@@ -344,7 +343,6 @@ function openImprove(file, p, versionId) {
 
 function closeImprove() {
   improveFile = null;
-  modeExplicit = false;
   improveOverlay.hidden = true;
   main.insertBefore(composer, main.firstChild);
   postBtn.textContent = 'Post';
@@ -621,15 +619,29 @@ async function readGeneration(res, state, log, status) {
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop();
-    for (const line of lines) {
-      if (line.trim()) handleGenerationEvent(JSON.parse(line), state, log, status);
+  let finished = false;
+  const readLine = (line) => {
+    if (!line.trim()) return;
+    const event = JSON.parse(line);
+    handleGenerationEvent(event, state, log, status);
+    finished ||= event.type === 'done';
+  };
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) readLine(line);
     }
+    readLine(buf + dec.decode());
+    if (!finished) throw new Error('Generation stream ended before completion.');
+  } catch (error) {
+    await reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    reader.releaseLock();
   }
 }
 
@@ -652,8 +664,7 @@ async function finishGeneration(pending, finishedPosts) {
 
 async function generate() {
   postBtn.disabled = true;
-  const requestedMode = modeExplicit ? $('.chip.on').dataset.mode : classifyPrompt(promptEl.value);
-  if (!modeExplicit) applyMode(requestedMode);
+  const requestedMode = $('.chip.on').dataset.mode;
   const pending = $('#pending');
   pending.innerHTML =
     '<section class="card"><div class="card-head"><div class="spinner"></div>' +
@@ -711,14 +722,6 @@ async function generate() {
   }
 }
 
-function classifyPrompt(prompt) {
-  return /\b(?:game|gameplay|playable|drivable|drive|3d|world|street|streets|racing|race|vehicle|car|character|level|arcade|simulator)\b/i.test(prompt)
-    ? 'game'
-    : /\b(?:dashboard|form|settings|table|feed|player|card|screen|ui|interface)\b/i.test(prompt)
-      ? 'ui'
-      : 'create';
-}
-
 function inferMode(settings) {
   if (settings.mode) return settings.mode;
   const firstLine = settings.systemPrompt?.split('\n', 1)[0];
@@ -746,7 +749,7 @@ function applyMode(mode) {
 function setMode(mode) {
   document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.mode === mode));
 }
-document.querySelectorAll('.chip').forEach((chip) => chip.addEventListener('click', () => { modeExplicit = true; applyMode(chip.dataset.mode); }));
+document.querySelectorAll('.chip').forEach((chip) => chip.addEventListener('click', () => applyMode(chip.dataset.mode)));
 promptEl.addEventListener('input', () => { postBtn.disabled = !promptEl.value.trim(); });
 postBtn.addEventListener('click', generate);
 promptEl.addEventListener('keydown', (e) => {

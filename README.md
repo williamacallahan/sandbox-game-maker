@@ -74,6 +74,14 @@ Game documents run with a server-enforced sandbox and cannot access the gallery,
 
 The server still scans stored records on a cold summary-cache load because creation timestamps live inside those records. Pagination bounds browser downloads and rendering; a lightweight storage index would be needed to make cold discovery independent of total gallery size.
 
+### Completed responses and bounded edits
+
+The model and limits shown in Settings are sent unchanged when you submit. Changing the mode applies that mode's defaults; submitting does not reset your selections. Improve retains the selected version's source and settings.
+
+File tools execute only after a completed model response with valid tool arguments. Failed, incomplete, truncated, or cancelled responses cannot apply their pending edits. A later failed response does not undo a valid save from an earlier completed response. Tool selection is automatic, and tool executions are sequential so edits use the latest saved content.
+
+`save_game` accepts at most 24,000 characters of source. Each `edit_game` match and replacement accepts at most 8,000 characters. Oversized calls fail without writing. Build a runnable foundation and grow it with small exact replacements; the reconstructed game can exceed those per-call limits. Every saved intermediate file must pass static validation. These are application limits, not a guarantee that a provider can generate a large replacement in one response.
+
 ### 5. What gets generated
 
 - One `.html` file with inline CSS and vanilla JS.

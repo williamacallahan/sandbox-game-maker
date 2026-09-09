@@ -8,8 +8,17 @@ export { GAME_FILENAME } from './storage.js';
 
 /** ~4 characters per token; real per-call usage arrives from the API only after the fact. */
 export const CHARS_PER_TOKEN = 4;
+export const MAX_SAVE_CHARS = 24000;
+export const MAX_EDIT_CHARS = 8000;
+const SAVE_SIZE_ERROR = `Content exceeds ${MAX_SAVE_CHARS} characters; no changes written. Save a runnable initial foundation, then use smaller exact edit_game calls.`;
+const EDIT_SIZE_ERROR = `old_text and new_text must each be at most ${MAX_EDIT_CHARS} characters; no changes written. Use smaller exact edit_game calls.`;
+
 function estimateTokens(chars: number): number {
   return Math.ceil(chars / CHARS_PER_TOKEN);
+}
+
+function exceedsCharLimit(value: string, limit: number): boolean {
+  return [...value].length > limit;
 }
 
 /**
@@ -295,12 +304,15 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
       description: `Save a finished game file in the gallery (${config.outDir}/). Filename must be lowercase kebab-case ending in .html or .js (no underscores / snake_case). Include concise player instructions for the gallery's How to play panel. Returns the saved path plus the same validation result as validate_game.`,
       inputSchema: z.object({
         filename: z.string().optional().describe('Lowercase kebab-case filename with no underscores, e.g. "my-game.html" or "guess-number.js"'),
-        content: z.string().describe('Complete, self-contained file content'),
+        content: z.string().max(MAX_SAVE_CHARS, SAVE_SIZE_ERROR).describe('Complete, self-contained file content'),
         instructions: z.string().max(500).optional().describe('Concise controls and objective for the player'),
       }),
       execute: async ({ filename, content, instructions }) => {
         const limit = budget.take();
         if (limit) return { error: limit };
+        if (exceedsCharLimit(content, MAX_SAVE_CHARS)) {
+          return budget.charge({ written: false, valid: false, error: SAVE_SIZE_ERROR });
+        }
         const metadata = saveMetadata();
         // Small models sometimes drop a field; the prompt is a usable name and description.
         filename ??= lastTarget ?? slugFilename(metadata.prompt);
@@ -388,13 +400,16 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
       description: `Apply one exact text replacement to an existing game in ${config.outDir}/. The old_text must occur exactly once; the reconstructed file passes static validation before it overwrites the same game. This cannot prove runtime behavior; use browser testing for that.`,
       inputSchema: z.object({
         path: z.string().describe(`Path returned by save_game, for example ${examplePath}`),
-        old_text: z.string().min(1).describe('Non-empty text that must occur exactly once'),
-        new_text: z.string().describe('Replacement text'),
+        old_text: z.string().min(1).max(MAX_EDIT_CHARS, EDIT_SIZE_ERROR).describe('Non-empty text that must occur exactly once'),
+        new_text: z.string().max(MAX_EDIT_CHARS, EDIT_SIZE_ERROR).describe('Replacement text'),
       }),
       execute: async ({ path, old_text, new_text }) => {
         const limit = budget.take();
         if (limit) return { error: limit };
         try {
+          if (exceedsCharLimit(old_text, MAX_EDIT_CHARS) || exceedsCharLimit(new_text, MAX_EDIT_CHARS)) {
+            return budget.charge({ written: false, valid: false, error: EDIT_SIZE_ERROR });
+          }
           if (!old_text) {
             return budget.charge({ written: false, valid: false, error: 'old_text must be non-empty; no changes were written.' });
           }
