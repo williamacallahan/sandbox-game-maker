@@ -97,7 +97,11 @@ export async function runAgent(
   const savePrompt = options?.savePrompt ?? (typeof input === 'string' ? input : input.findLast((message) => message.role === 'user')?.content ?? '');
   let providerFromHeaders: string | null = null;
   let upstreamCost: number | null = null;
-  let invalidResponseError: Error | null = null;
+  const textChunks: string[] = [];
+  let reasoningChars = 0;
+  let firstTokenAt: number | null = null;
+  let toolCallId = '';
+
   // Running totals from onTurnEnd, so a run that fails after save_game still records its usage.
   const turnTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reasoningTokens: 0, cost: 0, costSeen: false };
   let statsSaved = false;
@@ -117,7 +121,7 @@ export async function runAgent(
       }
       let finished = false;
       const encoder = new TextEncoder();
-      const eventHeader = z.object({ type: z.string(), response: z.unknown().optional() });
+      const eventHeader = z.object({ type: z.string(), response: z.unknown().optional(), delta: z.string().optional() });
       const events = new EventStream<Uint8Array>(response.body, ({ data }) => {
         if (data === '[DONE]') {
           if (!finished) throw new Error('Model stream ended without response.completed; no tools from this response were applied.');
@@ -125,13 +129,21 @@ export async function runAgent(
         }
         const event = eventHeader.parse(JSON.parse(data!));
         if (['response.incomplete', 'response.failed', 'error'].includes(event.type)) {
-          invalidResponseError = new Error(`Model sent ${event.type}; no tools from this response were applied. Retry with smaller edits.`);
-          finished = true;
-          return { done: false, value: encoder.encode(`data: ${JSON.stringify({ type: 'response.completed', response: { ...(event.response as object ?? {}), status: 'completed', output: [] } })}\n\n`) };
+          throw new Error(`Model sent ${event.type}; no tools from this response were applied. Retry with smaller edits.`);
         }
         if (event.type === 'response.completed') {
           if (!completed.safeParse(event.response).success) throw new Error('Model response.completed contained an incomplete response.');
           finished = true;
+        }
+        if (event.delta && ['response.output_text.delta', 'response.reasoning_text.delta', 'response.reasoning_summary_text.delta'].includes(event.type)) {
+          firstTokenAt ??= Date.now();
+          if (event.type === 'response.output_text.delta') {
+            textChunks.push(event.delta);
+            options?.onEvent?.({ type: 'text', delta: event.delta });
+          } else {
+            reasoningChars += event.delta.length;
+            options?.onEvent?.({ type: 'reasoning', delta: event.delta });
+          }
         }
         return { done: false, value: encoder.encode(`data: ${data}\n\n`) };
       });
@@ -156,6 +168,18 @@ export async function runAgent(
       toolChoice: 'auto',
       parallelToolCalls: false,
       toolConcurrency: 1,
+      hooks: {
+        PreToolUse: [{ handler: ({ toolName, toolInput }) => {
+          options?.signal?.throwIfAborted();
+          toolCallId = crypto.randomUUID();
+          options?.onEvent?.({ type: 'tool_call', name: toolName, callId: toolCallId, args: toolInput });
+        } }],
+        PostToolUse: [{ handler: ({ toolName, toolOutput }) => {
+          const output = typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput);
+          options?.onEvent?.({ type: 'tool_result', name: toolName, callId: toolCallId, output: output.length > 200 ? output.slice(0, 200) + '...' : output });
+          options?.onEvent?.({ type: 'turn_end' });
+        } }],
+      },
       instructions: config.systemPrompt,
       ...(!config.baseUrl && { provider: { order: ['groq', 'venice'], allowFallbacks: true } }),
       ...(config.maxOutputTokens && { maxOutputTokens: config.maxOutputTokens }),
@@ -165,6 +189,7 @@ export async function runAgent(
       input: input as string | Item[],
       tools: makeTools(config, budget, {
         storage,
+        signal: options?.signal,
         wantedFilename: options?.wantedFilename,
         existingVersionId: options?.existingVersionId,
         overwrite: options?.overwrite,
@@ -242,74 +267,9 @@ export async function runAgent(
   options?.signal?.addEventListener('abort', onAbort);
   if (options?.signal?.aborted) result.cancel();
 
-  // Draining getTextStream concurrently with getItemsStream reads the
-  // stream dry, so getResponse().outputText ends up empty. We accumulate
-  // text deltas here as a source of truth for the final text.
-  const textChunks: string[] = [];
-  let reasoningChars = 0;
-  let firstTokenAt: number | null = null;
-
   try {
-    if (options?.onEvent) {
-      // Run three streams concurrently: text / reasoning deltas
-      // for true deltas and getItemsStream filtered to tool events. The
-      // SDK's ReusableReadableStream allows concurrent consumption.
-      // getItemsStream must NOT be used for reasoning text: it yields items
-      // with cumulative updates (each event carries the whole summary so
-      // far), which double-counts and re-prints reasoning downstream.
-      const callNames = new Map<string, string>();
-
-      const streamReasoning = async () => {
-        for await (const event of result.getFullResponsesStream()) {
-          if (options?.signal?.aborted) break;
-          if (event.type !== 'response.reasoning_text.delta' && event.type !== 'response.reasoning_summary_text.delta') continue;
-          const delta = event.delta;
-          firstTokenAt ??= Date.now();
-          reasoningChars += delta.length;
-          options.onEvent!({ type: 'reasoning', delta });
-        }
-      };
-
-      const streamText = async () => {
-        for await (const delta of result.getTextStream()) {
-          if (options?.signal?.aborted) break;
-          firstTokenAt ??= Date.now();
-          options.onEvent!({ type: 'text', delta });
-          textChunks.push(delta);
-        }
-      };
-
-      const streamTools = async () => {
-        for await (const item of result.getItemsStream()) {
-          if (options?.signal?.aborted) break;
-          firstTokenAt ??= Date.now();
-          if (item.type === 'function_call') {
-            callNames.set(item.callId, item.name);
-            if (item.status === 'completed') {
-              const args = (() => { try { return item.arguments ? JSON.parse(item.arguments) : {}; } catch { return {}; } })();
-              options.onEvent!({ type: 'tool_call', name: item.name, callId: item.callId, args });
-            }
-          } else if (item.type === 'function_call_output') {
-            const out = typeof item.output === 'string' ? item.output : JSON.stringify(item.output);
-            options.onEvent!({
-              type: 'tool_result',
-              name: callNames.get(item.callId) ?? 'unknown',
-              callId: item.callId,
-              output: out.length > 200 ? out.slice(0, 200) + '...' : out,
-            });
-            // Signal a turn boundary; consumers (e.g. CLI text mode) can
-            // render a separator. Keeps presentation out of agent.ts.
-            options.onEvent!({ type: 'turn_end' });
-          }
-        }
-      };
-
-      await Promise.all([streamText(), streamTools(), streamReasoning()]);
-    }
-
     const response = await result.getResponse();
     options?.signal?.throwIfAborted();
-    if (invalidResponseError) throw invalidResponseError;
     if (response.status !== 'completed') throw new Error('Model response did not complete.');
     const totals = await result.getUsage();
     const durationMs = Date.now() - startedAt;

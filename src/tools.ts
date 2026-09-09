@@ -18,7 +18,10 @@ function estimateTokens(chars: number): number {
 }
 
 function exceedsCharLimit(value: string, limit: number): boolean {
-  return [...value].length > limit;
+  if (value.length <= limit) return false;
+  let count = 0;
+  for (const _character of value) if (++count > limit) return true;
+  return false;
 }
 
 /**
@@ -265,6 +268,7 @@ function errorMessage(error: unknown): string {
 }
 
 export type MakeToolsOptions = {
+  signal?: AbortSignal;
   storage?: GameStorage;
   existingVersionId?: string;
   wantedFilename?: string;
@@ -292,6 +296,7 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
     if (!validation.valid) {
       return budget.charge({ written: false, valid: false, issues: validation.issues, hint: 'Fix these issues and save again with the same filename.' });
     }
+    options.signal?.throwIfAborted();
     const post = await storage.save(target, content, { ...metadata, instructions }, overwrite);
     ownNames.set(requestedName, target).set(target, target);
     lastTarget = target;
