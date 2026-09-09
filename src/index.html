@@ -383,7 +383,7 @@ function postCard(p) {
   const unavailable = p.unavailable === true;
   // .js terminal games play in the page via the server's ?play xterm runner.
   const src = '/games/' + p.file + (isJs ? '?play=1' : '');
-  const media = '<div class="media" data-game-media>' + (unavailable ? '<div class="placeholder"><div class="placeholder-icon">⚠️</div><b>Creation unavailable</b><small>Use Details or Improve to retry metadata.</small></div>' : '<iframe class="game-frame" loading="lazy" sandbox="allow-scripts" title="' + esc(name) + '" data-src="' + esc(src) + '"></iframe>') + '</div>';
+  const media = '<div class="media" data-game-media>' + (unavailable ? '<div class="placeholder"><div class="placeholder-icon">⚠️</div><b>Creation unavailable</b><small>Use Details or Improve to retry metadata.</small></div>' : '<iframe class="game-frame" loading="lazy" sandbox="allow-scripts allow-same-origin" title="' + esc(name) + '" data-src="' + esc(src) + '"></iframe>') + '</div>';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
     '<div class="who"><b>' + esc(name) + '</b><small></small></div>' +
