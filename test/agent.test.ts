@@ -75,6 +75,12 @@ describe('loadConfig', () => {
 });
 
 describe('validateGameFile', () => {
+  test('rejects broken JavaScript before saving without executing valid scripts or JSON data', () => {
+    const shell = '<body style="margin:0;overflow:hidden;width:100vw;height:100vh"><button onclick="void 0">Play</button>';
+    expect(validateGameContent('game.html', shell + '<script>const x = (1));</script></body>').issues.some(issue => issue.includes('syntax error'))).toBe(true);
+    expect(validateGameContent('game.html', shell + '<script>throw new Error("must not execute during validation")</script></body>').valid).toBe(true);
+    expect(validateGameContent('game.html', shell + '<script type="application/json">{"value":42}</script><script type="module">export const value = 42;</script></body>').valid).toBe(true);
+  });
   test('passes a valid interactive HTML game', async () => {
     const { valid, issues } = await validateGameFile('test/fixtures/good-game.html');
     expect(issues).toEqual([]);
@@ -100,17 +106,15 @@ describe('validateGameFile', () => {
     expect(validateGameContent('games/good-game.html', raw).valid).toBe(true);
   });
 
-  test('rejects event-dependent initialization and uncolored chart bars', () => {
+  test('rejects uncolored chart bars', () => {
     const badChart = '<body style="margin:0;width:100vw;height:100vh;overflow:hidden"><div id="chart"></div><script>function render(){const bar=document.createElement("div"); bar.className="bar"; chart.appendChild(bar)}; render(); event.target.classList.add("active")</script></body>';
     const result = validateGameContent('games/bad-chart.html', badChart);
     expect(result.valid).toBe(false);
-    expect(result.issues.some((issue) => issue.includes('global event target'))).toBe(true);
     expect(result.issues.some((issue) => issue.includes('Chart bars must assign'))).toBe(true);
 
     const coloredChart = badChart.replace('event.target.classList.add("active")', 'bar.style.backgroundColor = "#2563eb"; render()');
     const colored = validateGameContent('games/good-chart.html', coloredChart);
     expect(colored.issues.some((issue) => issue.includes('Chart bars must assign'))).toBe(false);
-    expect(colored.issues.some((issue) => issue.includes('global event target'))).toBe(false);
   });
 
   test('rejects malformed grid tracks and mismatched table wrapper selectors', () => {
@@ -124,10 +128,16 @@ describe('validateGameFile', () => {
     expect(validateGameContent('games/good-layout.html', goodLayout).issues).toEqual([]);
   });
 
-  test('rejects a linear road racer when the prompt requests free-range driving', () => {
-    const content = '<body style="margin:0;width:100vw;height:100vh;overflow:hidden"><canvas></canvas><script>let segments=[],position=0,playerX=0; function update(){position+=1; playerX+=1} addEventListener("keydown",()=>{});</script></body>';
-    const result = validateGameContent('games/drive.html', content);
-    expect(result.issues.some((issue) => issue.includes('linear segment loop'))).toBe(true);
+  test('rejects DOM markup assignments while allowing event parameters and reads', () => {
+    const shell = '<body style="margin:0;width:100vw;height:100vh;overflow:hidden"><button id="play">Play</button><script>';
+    const unsafe = shell + 'const panel = document.createElement("div"); panel.innerHTML = "<b>Play</b>"; play.addEventListener("click", () => {});</script></body>';
+    expect(validateGameContent('games/unsafe.html', unsafe).issues.some((issue) => issue.includes('innerHTML/outerHTML'))).toBe(true);
+
+    const safe = shell + 'const panel = document.createElement("div"); play.addEventListener("click", (event) => { event.target.classList.add("active"); panel.textContent = "Playing"; });</script></body>';
+    expect(validateGameContent('games/safe.html', safe).issues).toEqual([]);
+
+    const readOnly = shell + 'const panel = document.createElement("div"); const markup = panel.innerHTML === ""; play.addEventListener("click", () => {});</script></body>';
+    expect(validateGameContent('games/read-only.html', readOnly).issues).toEqual([]);
   });
 
   test('prompts require post-save validation', () => {
@@ -143,6 +153,10 @@ describe('validateGameFile', () => {
     const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
     expect(gamePrompt).toContain('Initialize game state and the first render');
     expect(gamePrompt).toContain('visible gameplay element and meter');
+    expect(gamePrompt).toContain('preserving its original objective');
+    expect(gamePrompt).toContain('real navigable 3D geometry');
+    expect(gamePrompt).toContain('static policy and structure checks');
+    expect(gamePrompt).not.toContain('exercise the state transitions');
     expect(CREATE_SYSTEM_PROMPT).toContain('interactive creative works');
     expect(CREATE_SYSTEM_PROMPT).toContain('save_game instructions metadata');
     expect(UI_SYSTEM_PROMPT).toContain('Render every chart on initialization');

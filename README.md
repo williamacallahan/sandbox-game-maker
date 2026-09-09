@@ -1,6 +1,6 @@
 # Game Maker
 
-Generate one-shot, self-contained HTML games and creative works from the Web UI using OpenRouter or an OpenAI-compatible Responses API.
+Generate and iteratively improve self-contained HTML games and creative works from the Web UI using OpenRouter or an OpenAI-compatible Responses API.
 
 ## Web UI quick start
 
@@ -31,10 +31,9 @@ Keep deployment endpoints and credentials in environment variables. You can put 
 
 ```json
 {
-  "model": "qwen3.8-27b",
-  "maxToolCalls": 8,
-  "maxContextTokens": 64000,
-  "maxOutputTokens": 36000,
+    "maxToolCalls": 8,
+  "maxContextTokens": 131072,
+  "maxOutputTokens": 65536,
   "maxCost": 1.0
 }
 ```
@@ -57,13 +56,13 @@ Open <http://localhost:3000>.
 
 1. Enter your **Prompt** — e.g. *"a neon snake game with wrap-around walls"*.
 2. (Optional) Expand **Settings** and pick a mode: **Game** (default), **Create** (any creative work), or **UI** (an app screen: dashboard, form, card). Each mode loads its own system prompt; UI also sets the model to the gateway's `oui-1` generative-UI model with its declared limits (16384 context tokens, 8192 output tokens). Then change:
-   - **Model** (default `qwen/qwen3.8-flash` on OpenRouter, `glm-5.3-flash` when `LLM_BASE_URL` points at the gateway)
+   - **Model** (Qwen 3.8 Flash by default; `AGENT_MODEL` or an explicit model selection overrides the default)
    - **System Prompt** (default game rules in `src/config.ts`)
    - **Reasoning Effort** (`low`, `medium`, `high`)
    - **Max Tool Calls**, **Context Tokens**, **Output Tokens**, **Max Cost**
 3. Click **Make Game**.
 
-The agent streams the generation, calls `save_game` and `validate_game`, and saves a self-contained `.html` file with its prompt, settings, and player instructions. Each card's **Delete** removes the version shown in its history select, or the whole creation when that is the only version, after a confirmation dialog. Selecting an older version reveals **Set as current**, which copies that version to the top of the history so the feed, the player, and Improve use it; nothing is discarded. Without object storage, files stay in `games/`; configure durable storage below before running in a disposable container. Open the saved game from its feed card to play it in a separate tab.
+The agent streams the generation, calls `save_game` and `validate_game`, and saves a self-contained `.html` file with its prompt, settings, and player instructions. Each card's **Delete** removes the version shown in its history select, or the whole creation when that is the only version, after a confirmation dialog. Selecting an older version reveals **Set as current**, which copies that version to the top of the history so the feed, the player, and Improve use it; nothing is discarded. Without object storage, files stay in `games/`; configure durable storage below before running in a disposable container. Play in the square feed viewport. Offscreen games unload and restart when scrolled back into view.
 
 ### Gallery performance and game isolation
 
@@ -174,9 +173,15 @@ CLI flags: `-m, --model`, `-s, --system`, `-r, --reasoning`, `-o, --out`, `--max
 - `src/index.html` — Web UI
 - `src/server.ts` — Bun dev server on port 3000
 - `src/agent.ts` — model calling, streaming, and token/cost metadata
-- `src/tools.ts` — `save_game` / `validate_game` / `read_file` tools
+- `src/tools.ts` — `save_game` / `edit_game` / `validate_game` / `read_file` tools
 - `src/storage.ts` — local and S3 game persistence
 - `scripts/migrate-games.ts` — copy an existing local gallery to object storage
 - `src/config.ts` — prompts, defaults, and `loadConfig`
 - `src/cli.ts` — command-line runner
 - `games/` — generated output (`*.html`, `*.js`, `feed.json`)
+
+### Iterating and verifying
+
+Improve preserves the selected mode, original objective, and edit history. The model can use `edit_game` for a unique exact text replacement; missing or ambiguous matches and invalid reconstructed files leave the saved version unchanged.
+
+`validate_game` checks static format and policy rules. It cannot establish playability, visual realism, or feature parity; those require browser interaction and visual review. Output allowances include reasoning and tool arguments, so exhausting them may leave no generated code. Reasoning counts derived from streamed characters are labeled as estimates; provider-reported counts remain separate from judgments of output quality.

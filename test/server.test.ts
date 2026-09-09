@@ -6,14 +6,43 @@ import { CREATE_SYSTEM_PROMPT, UI_SYSTEM_PROMPT, loadConfig } from '../src/confi
 import { createGameStorage } from '../src/storage.js';
 
 const SOURCE = '<!doctype html>\n<html>\n<head><style>body { margin: 0; }</style></head>\n<body data-game-overlay="x">\n<script>console.log("hi \\"there\\"");</script>\n</body>\n</html>\n';
+const SAVED_SOURCE = '<body style="margin:0;overflow:hidden;width:100vw;height:100vh"><button id="play">Play</button><script>document.querySelector("#play").addEventListener("click", () => {});</script></body>';
+
+function completedResponse(output: unknown[], model = 'save-test') {
+  return {
+    id: crypto.randomUUID(), object: 'response', created_at: Date.now(), completed_at: Date.now(), model, status: 'completed',
+    error: null, incomplete_details: null, instructions: null, metadata: null, frequency_penalty: null,
+    output, parallel_tool_calls: false, presence_penalty: null, temperature: null, tool_choice: 'auto', tools: [], top_p: null,
+  };
+}
 
 // Every Improve request must reach the model with the system prompt, the change request, and the full stored source.
 describe('POST /api/generate (Improve)', () => {
   const upstreamBodies: any[] = [];
+  let releaseDelayedUpstream: (() => void) | undefined;
+  let delayedUpstreamStarted: (() => void) | undefined;
   const upstream = Bun.serve({
     port: 0,
     async fetch(req) {
-      if (new URL(req.url).pathname.endsWith('/responses')) upstreamBodies.push(await req.json());
+      if (!new URL(req.url).pathname.endsWith('/responses')) return new Response('not found', { status: 404 });
+      const body = await req.json();
+      upstreamBodies.push(body);
+      if (body.model === 'delayed-test') {
+        delayedUpstreamStarted?.();
+        await new Promise<void>((resolve) => { releaseDelayedUpstream = resolve; });
+      }
+      if (body.model === 'save-test') {
+        if (typeof body.input === 'string') {
+          return Response.json(completedResponse([{
+            type: 'function_call', id: crypto.randomUUID(), call_id: crypto.randomUUID(), name: 'save_game', status: 'completed',
+            arguments: JSON.stringify({ filename: 'poster.html', content: SAVED_SOURCE, instructions: 'Click Play.' }),
+          }]));
+        }
+        return Response.json(completedResponse([{
+          type: 'message', id: crypto.randomUUID(), role: 'assistant', status: 'completed',
+          content: [{ type: 'output_text', text: 'Saved.', annotations: [] }],
+        }]));
+      }
       // 4xx is not retried by the SDK, so each Improve produces exactly one upstream request.
       return Response.json({ error: { message: 'mock upstream' } }, { status: 400 });
     },
@@ -92,26 +121,78 @@ describe('POST /api/generate (Improve)', () => {
     expect(text).toContain('Versioned reads require S3 storage');
   });
 
-  test('canonical mode remaps stale Improve settings before the model call', async () => {
+  test('preserves custom Improve model and system prompt', async () => {
     const before = upstreamBodies.length;
-    const { status } = await improve({ mode: 'game', model: 'oui-1', systemPrompt: UI_SYSTEM_PROMPT });
+    const customPrompt = 'custom instructions';
+    const { status } = await improve({ mode: 'game', model: 'custom-model', systemPrompt: customPrompt, maxContextTokens: 12345, maxOutputTokens: 4567 });
     expect(status).toBe(200);
     const sent = upstreamBodies[before];
-    expect(sent.model).not.toBe('oui-1');
-    expect(sent.instructions).not.toBe(UI_SYSTEM_PROMPT);
-    expect(sent.instructions).toContain('small, playable one-shot games');
+    expect(sent.model).toBe('custom-model');
+    expect(sent.instructions).toBe(customPrompt);
+    expect(sent.max_output_tokens).toBe(4567);
+    expect(sent.input).toContain('add a toolbar');
   });
 
-  test('expands 3D driving objectives into concrete Game acceptance mechanics', async () => {
+  test.each([
+    ['create', CREATE_SYSTEM_PROMPT, 'qwen3.8-flash-prod-users'],
+    ['ui', UI_SYSTEM_PROMPT, 'oui-1'],
+  ])('%s mode supplies defaults only when fields are absent', async (mode, systemPrompt, model) => {
     const before = upstreamBodies.length;
-    const { status } = await improve({
-      mode: 'game',
-      prompt: 'Make a free-range 3D drivable city with streets and landmarks',
-    });
+    const { status } = await improve({ mode });
     expect(status).toBe(200);
     const sent = upstreamBodies[before];
-    expect(sent.input).toContain('independent world x/z position');
-    expect(sent.input).toContain('intersecting or branching road graph');
-    expect(sent.input).toContain('exercise acceleration, steering through a turn, reverse');
+    expect(sent.instructions).toBe(systemPrompt);
+    expect(sent.model).toBe(model);
+  });
+
+  test('uses the Game defaults when mode is absent', async () => {
+    const before = upstreamBodies.length;
+    const { status } = await improve({});
+    expect(status).toBe(200);
+    const sent = upstreamBodies[before];
+    expect(sent.instructions).toBe(loadConfig({}, { skipApiKey: true }).systemPrompt);
+    expect(sent.model).toBe('qwen3.8-flash-prod-users');
+  });
+
+  test('sends an NDJSON status before a delayed upstream completes', async () => {
+    const upstreamStarted = new Promise<void>((resolve) => { delayedUpstreamStarted = resolve; });
+    const response = fetch(`${base}/api/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: 'wait', model: 'delayed-test' }),
+    });
+    await upstreamStarted;
+    const res = await Promise.race([
+      response,
+      Bun.sleep(1_000).then(() => { throw new Error('generation headers were not delivered while upstream was waiting'); }),
+    ]);
+    expect(res.headers.get('content-type')).toContain('application/x-ndjson');
+    const reader = res.body!.getReader();
+    const first = await reader.read();
+    expect(JSON.parse(new TextDecoder().decode(first.value))).toEqual({ type: 'status', message: 'Generating...' });
+    releaseDelayedUpstream?.();
+    await reader.cancel();
+    reader.releaseLock();
+    releaseDelayedUpstream = undefined;
+    delayedUpstreamStarted = undefined;
+  });
+
+  test('accumulates the original objective and successive Improve edits', async () => {
+    const first = await improve({ prompt: 'add a toolbar', mode: 'create', model: 'save-test' });
+    expect(first.status).toBe(200);
+    const stored = createGameStorage(join(dir, 'games'));
+    expect((await stored.read('poster.html')).post).toMatchObject({
+      prompt: 'a poster\n\nadd a toolbar', settings: { mode: 'create' },
+    });
+    const before = upstreamBodies.length;
+    const second = await improve({ prompt: 'add keyboard shortcuts', model: 'save-test' });
+    expect(second.status).toBe(200);
+    const sent = upstreamBodies[before];
+    expect(sent.instructions).toBe(CREATE_SYSTEM_PROMPT);
+    expect(sent.input).toContain('The original prompt was: "a poster\n\nadd a toolbar"');
+    expect(sent.input).toContain('Change request: add keyboard shortcuts');
+    expect((await stored.read('poster.html')).post).toMatchObject({
+      prompt: 'a poster\n\nadd a toolbar\n\nadd keyboard shortcuts', settings: { mode: 'create' },
+    });
   });
 });

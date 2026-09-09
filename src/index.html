@@ -178,7 +178,7 @@
         <div><label for="maxToolCalls">Max tool calls <span class="tip" data-tooltip="Per-chat cap: total tool calls allowed across the whole run.">?</span></label><input id="maxToolCalls" type="number" min="1" step="1"></div>
         <div><label for="maxCost">Max cost (USD) <span class="tip" data-tooltip="Per-chat cap: total spend in USD allowed across the whole run. Enforced after each step, so a single expensive step can slightly exceed it.">?</span></label><input id="maxCost" type="number" min="0.05" step="0.05"></div>
         <div class="wide"><label for="maxContextTokens">Max context tokens <span class="tip" data-tooltip="Per-chat cap: total tokens available for the prompt + tool results + model output across the whole run. Larger values keep more history but cost more.">?</span></label><input id="maxContextTokens" type="number" min="1000" step="1000"></div>
-        <div><label for="maxOutputTokens">Max output tokens <span class="tip" data-tooltip="Per-message cap: maximum tokens the model may generate in a single response. Does not include reasoning or tool-call tokens.">?</span></label><input id="maxOutputTokens" type="number" min="1" step="1" placeholder="model default"></div>
+        <div><label for="maxOutputTokens">Max output tokens <span class="tip" data-tooltip="Per-response output allowance, including reasoning and tool-call arguments. A low cap can exhaust the budget before the model writes code.">?</span></label><input id="maxOutputTokens" type="number" min="1" step="1" placeholder="model default"></div>
         <div><label for="maxReasoningTokens">Max reasoning tokens <span class="tip" data-tooltip="Per-message cap: maximum reasoning tokens the model may use in a single response.">?</span></label><input id="maxReasoningTokens" type="number" min="1" step="1" placeholder="model default"></div>
         <div><label for="reasoningEffort">Reasoning</label><select id="reasoningEffort"><option value="">model default</option></select></div>
         <div class="wide"><label for="filename">Filename</label><input id="filename" placeholder="auto — e.g. my-game.html" pattern="[a-z0-9][a-z0-9-]*\.(html|js)" title="lowercase kebab-case, no underscores, ending in .html or .js"></div>
@@ -233,7 +233,7 @@ function esc(t) { const d = document.createElement('div'); d.textContent = t; re
 // One-line run summary from a done event's stats.
 function statsLine(t) {
   const parts = [
-    t.totalTokens + ' tokens (' + t.reasoningTokens + ' reasoning)',
+    t.totalTokens + ' tokens (' + (t.reasoningTokensEstimated ? '~' : '') + t.reasoningTokens + ' reasoning' + (t.reasoningTokensEstimated ? ', estimated' : ', reported') + ')',
     t.toolCalls + ' tool calls',
   ];
   if (t.tokensPerSec) parts.push(t.tokensPerSec + ' tok/s');
@@ -260,7 +260,7 @@ function detailsPanel(p) {
       ['tokens/sec', t.tokensPerSec ?? 'unknown'],
       ['time to first token', t.ttftMs != null ? Math.round(t.ttftMs) + 'ms' : 'unknown'],
       ['total tokens', t.totalTokens],
-      ['reasoning tokens', t.reasoningTokens],
+      [t.reasoningTokensEstimated ? 'reasoning tokens (estimated)' : 'reasoning tokens (reported)', t.reasoningTokens],
       ['tool calls', t.toolCalls],
       ['elapsed', (t.durationMs / 1000).toFixed(1) + 's'],
       ...(t.cost != null ? [['cost', '$' + t.cost.toFixed(4)]] : []),
@@ -320,13 +320,14 @@ function confirmDialog(text) {
 function openImprove(file, p, versionId) {
   improveFile = file;
   improveVersionId = versionId;
-  modeExplicit = false;
+  modeExplicit = true;
   improveTitle.textContent = 'Improve ' + file;
   improveHost.append(composer);
   promptEl.value = '';
   postBtn.textContent = 'Improve';
   postBtn.disabled = true;
   const s = p.settings ?? {};
+  setMode(inferMode(s));
   systemEl.value = s.systemPrompt ?? cfg?.systemPrompt ?? '';
   $('#model').value = s.model ?? cfg?.model ?? '';
   $('#maxToolCalls').value = s.maxToolCalls ?? cfg?.maxToolCalls ?? '';
@@ -654,13 +655,21 @@ function classifyPrompt(prompt) {
       : 'create';
 }
 
+function inferMode(settings) {
+  if (settings.mode) return settings.mode;
+  const firstLine = settings.systemPrompt?.split('\n', 1)[0];
+  if (firstLine === 'You build small, self-contained creative works from a single prompt.') return 'create';
+  if (firstLine === 'You design polished, self-contained app screens from a single prompt:' || settings.model === cfg?.ui?.model) return 'ui';
+  return 'game';
+}
+
 improveOverlay.addEventListener('click', (e) => { if (e.target === improveOverlay) closeImprove(); });
 $('#improve-cancel').addEventListener('click', closeImprove);
 
 // Each mode owns the system prompt, the example prompt, and (for UI) the model
 // and token limits, which follow the gateway's declared limits for oui-1.
 function applyMode(mode) {
-  document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.mode === mode));
+  setMode(mode);
   const ui = mode === 'ui';
   systemEl.value = ui ? cfg.uiSystemPrompt : mode === 'create' ? cfg.createSystemPrompt : cfg.systemPrompt;
   $('#model').value = ui ? cfg.ui.model : cfg.model;
@@ -669,6 +678,9 @@ function applyMode(mode) {
   const [oldPrompt, newPrompt] = ui ? [cfg.defaultPrompt, cfg.ui.defaultPrompt] : [cfg.ui.defaultPrompt, cfg.defaultPrompt];
   if (!promptEl.value.trim() || promptEl.value.trim() === oldPrompt) promptEl.value = newPrompt;
   syncEfforts();
+}
+function setMode(mode) {
+  document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c.dataset.mode === mode));
 }
 document.querySelectorAll('.chip').forEach((chip) => chip.addEventListener('click', () => { modeExplicit = true; applyMode(chip.dataset.mode); }));
 promptEl.addEventListener('input', () => { postBtn.disabled = !promptEl.value.trim(); });
@@ -721,6 +733,7 @@ const feedPromise = loadFeed(true).catch((error) => {
   showFeedError(error);
 });
 cfg = await fetch('/api/config').then((r) => r.json());
+$('#config-status').hidden = true;
 for (const key of ['maxToolCalls', 'maxCost']) $('#' + key).value = cfg[key];
 applyMode('game');
 postBtn.disabled = false;
