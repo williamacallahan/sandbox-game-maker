@@ -283,12 +283,15 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
         }
         // A requested name (new or Improve) is used as-is; a model-picked name gets a unique suffix on collision.
         const target = options.wantedFilename ?? ownNames.get(filename) ?? await storage.uniqueName(filename);
+        const validation = validateGameContent(target, content);
+        if (!validation.valid) {
+          return budget.charge({ written: false, valid: false, issues: validation.issues, hint: 'Fix these issues and save again with the same filename.' });
+        }
         const post = await storage.save(target, content, { ...metadata, instructions }, options.overwrite || ownNames.has(target));
         ownNames.set(filename, target).set(target, target);
         lastTarget = target;
         options.onSave?.(post);
-        const { valid, issues } = validateGameContent(target, content);
-        return budget.charge({ written: true, path: `${config.outDir}/${target}`, valid, ...(issues.length && { issues, hint: 'Fix these issues and save again with the same filename.' }) });
+        return budget.charge({ written: true, path: `${config.outDir}/${target}`, valid: true });
       },
     }),
 

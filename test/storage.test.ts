@@ -276,6 +276,23 @@ describe('game storage', () => {
       expect(saved).toEqual([]);
     });
   });
+
+  test('rejects invalid content before persistence', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const saved: Post[] = [];
+      const [save] = makeTools(config, new Budget(4, 10_000, 0), { storage, onSave: (post) => saved.push(post) });
+      const result = await save.function.execute({
+        filename: 'bad-chart.html',
+        content: '<body style="margin:0;width:100vw;height:100vh;overflow:hidden"><div class="bar"></div><script>event.target.classList.add("active")</script></body>',
+        instructions: 'Chart',
+      });
+      expect(result).toMatchObject({ written: false, valid: false });
+      expect(await storage.exists('bad-chart.html')).toBe(false);
+      expect(saved).toEqual([]);
+    });
+  });
 });
 
 const runStorageIntegration = process.env.RUN_STORAGE_INTEGRATION === '1';
