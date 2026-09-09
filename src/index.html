@@ -406,8 +406,18 @@ function postCard(p) {
 
   const frame = $('.game-frame', card);
   if (frame) {
-    const wake = () => { if (!frame.src) frame.src = frame.dataset.src; };
-    const sleep = () => { if (frame.src) frame.removeAttribute('src'); };
+    const wake = async () => {
+      if (frame.srcdoc || frame.dataset.loading) return;
+      frame.dataset.loading = '1';
+      try {
+        const response = await fetch(frame.dataset.src);
+        if (!response.ok) throw new Error('game load failed');
+        frame.srcdoc = await response.text();
+      } catch {
+        frame.srcdoc = '<body style="margin:0;display:grid;place-items:center;font:14px system-ui;color:#666">Game unavailable</body>';
+      } finally { delete frame.dataset.loading; }
+    };
+    const sleep = () => { if (frame.srcdoc) frame.srcdoc = ''; };
     const visibility = new IntersectionObserver(([entry]) => entry.isIntersecting ? wake() : sleep(), { rootMargin: '220px 0px' });
     visibility.observe(card);
     $('.play-link', card).addEventListener('click', () => { wake(); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
