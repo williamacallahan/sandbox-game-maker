@@ -124,6 +124,12 @@ describe('validateGameFile', () => {
     expect(validateGameContent('games/good-layout.html', goodLayout).issues).toEqual([]);
   });
 
+  test('rejects a linear road racer when the prompt requests free-range driving', () => {
+    const content = '<body style="margin:0;width:100vw;height:100vh;overflow:hidden"><canvas></canvas><script>let segments=[],position=0,playerX=0; function update(){position+=1; playerX+=1} addEventListener("keydown",()=>{});</script></body>';
+    const result = validateGameContent('games/drive.html', content);
+    expect(result.issues.some((issue) => issue.includes('linear segment loop'))).toBe(true);
+  });
+
   test('prompts require post-save validation', () => {
     const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
     for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT]) {

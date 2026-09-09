@@ -80,6 +80,9 @@ function validateHtmlGame(content: string, issues: string[]) {
   if (/(?:^|[^\w$.])event\.(?:target|currentTarget)\b/i.test(content)) {
     issues.push('HTML reads the global event target: pass the event or clicked element explicitly so initial rendering works without a browser event.');
   }
+  if (/\bsegments\b[\s\S]{0,500}\bplayerX\b/i.test(content) && !/\b(?:worldX|worldZ|playerZ|carX|carZ|vehicleX|vehicleZ)\b/i.test(content)) {
+    issues.push('Free-range driving cannot be implemented as a linear segment loop with lateral playerX movement.');
+  }
 
   const rendersBars = /(?:className|classList\.add|class\s*=)[^\n;]{0,80}\bbar\b/i.test(content);
   if (rendersBars && !/(?:background(?:Color)?|fill)\s*[:=]/i.test(content)) {
@@ -173,6 +176,20 @@ function validateHtmlGame(content: string, issues: string[]) {
   const hasInput = /addEventListener\s*\(\s*["'](?:click|pointerdown|pointerup|touchstart|touchend|keydown|keyup|keypress)["']/i.test(content) ||
     /\bon(?:click|pointerdown|pointerup|touchstart|touchend|keydown|keyup|keypress)\s*=/i.test(content);
   if (!hasInput) issues.push('Game must have at least one input handler (click, pointerdown, touchstart, or keydown).');
+}
+
+function validateFreeRoamGame(prompt: string, content: string, issues: string[]) {
+  if (!/\b(?:3d|drivable|driving|free[- ]?range|streets?|vehicle|car)\b/i.test(prompt) && !/\bsegments\b[\s\S]{0,500}\bplayerX\b/i.test(content)) return;
+  const hasWorldCoordinates = /\b(?:worldX|worldZ|playerZ|carX|carZ|vehicleX|vehicleZ)\b|\b(?:world|player|car|vehicle)\w*\s*\.?(?:x|z)\b/i.test(content);
+  const hasHeading = /\b(?:heading|yaw|rotation|angle)\b/i.test(content);
+  const hasRoadChoice = /\b(?:intersection|intersections|branch|branches|roadGraph|turnLeft|turnRight|junction)\b/i.test(content);
+  const hasOrientation = /\b(?:minimap|mini-map|compass|heading)\b/i.test(content);
+  if (/(?:\bsegments\b|\bposition\b)[\s\S]{0,500}\bplayerX\b/i.test(content) && !hasWorldCoordinates) {
+    issues.push('Free-range driving cannot be implemented as a linear segment loop with lateral playerX movement.');
+  }
+  if (!hasWorldCoordinates || !hasHeading || !hasRoadChoice || !hasOrientation) {
+    issues.push('Free-range 3D driving requires world coordinates, heading, intersecting roads or branches, and an orientation/minimap cue.');
+  }
 }
 
 function validateJsGame(content: string, issues: string[]) {
@@ -290,6 +307,9 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
         if (!GAME_FILENAME.test(options.wantedFilename ?? filename)) {
           return budget.charge({ error: `Invalid filename ${JSON.stringify(filename)}: must match ${GAME_FILENAME}` });
         }
+        const semanticIssues: string[] = [];
+        validateFreeRoamGame(metadata.prompt, content, semanticIssues);
+        if (semanticIssues.length) return budget.charge({ written: false, valid: false, issues: semanticIssues, hint: 'Implement the requested world mechanics and save again.' });
         // A requested name (new or Improve) is used as-is; a model-picked name gets a unique suffix on collision.
         const target = options.wantedFilename ?? ownNames.get(filename) ?? await storage.uniqueName(filename);
         const validation = validateGameContent(target, content);
