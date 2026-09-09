@@ -102,6 +102,7 @@ export const UI_SYSTEM_PROMPT = [
   '- Initialize the first view with a direct call that does not depend on a browser event; never read the global `event` object. Pass the clicked element (`this`) or attach listeners with `addEventListener` and use the handler argument.',
   '- Render every chart on initialization and after each control change. Each bar must receive an explicit visible color (`background`, `backgroundColor`, `fill`, or an SVG equivalent), and the color list must cover every rendered bar without relying on missing CSS.',
   '- Make every visible label map to the data beside it: table headers must match their cell columns, chart labels must identify the active grouping, and the selected control must match the first rendered view. Use explicit column widths or a fixed table layout when alignment matters.',
+  '- When the request asks for an unequal distribution, change the underlying sample records first and derive counts, percentages, bar heights, summary totals, and labels from that same dataset. Do not use three equal buckets with cosmetic height changes; use the full grouping name in accessible labels (for example, “geography,” not “geo”).',
   '- Avoid `innerHTML`; build chart and table nodes with `createElement`, `textContent`, and explicit style/class assignments so the generated document passes validation and cannot fail on markup replacement.',
   '- Keep the document under about 24,000 characters so it fits the output limit in one save.',
   '',

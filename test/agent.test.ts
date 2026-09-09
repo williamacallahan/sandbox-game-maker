@@ -143,5 +143,7 @@ describe('validateGameFile', () => {
     expect(UI_SYSTEM_PROMPT).toContain('never read the global `event` object');
     expect(UI_SYSTEM_PROMPT).toContain('min-height:0; overflow:auto');
     expect(UI_SYSTEM_PROMPT).toContain('table headers must match their cell columns');
+    expect(UI_SYSTEM_PROMPT).toContain('change the underlying sample records first');
+    expect(UI_SYSTEM_PROMPT).toContain('full grouping name in accessible labels');
   });
 });
