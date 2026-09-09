@@ -11,6 +11,7 @@ export function positiveNumber(name: string, raw: string): number {
 }
 
 export type { ReasoningEffort };
+export type AgentMode = 'game' | 'create' | 'ui';
 /** Canonical gateway effort values, descending effort order (from the SDK enum). */
 export const REASONING_EFFORTS: readonly string[] = Object.values(ReasoningEffort);
 
@@ -26,6 +27,8 @@ export interface AgentConfig {
   baseUrl?: string;
   model: string;
   systemPrompt: string;
+  /** Composer mode that selected this run's defaults. */
+  mode?: AgentMode;
   /** Hard cap on total tool calls across the whole run. */
   maxToolCalls: number;
   /** Hard cap on context growth in tokens (prompt + tool results, ~4 chars/token estimate). */
@@ -114,7 +117,7 @@ export const UI_SYSTEM_PROMPT = [
 ].join('\n');
 
 /** Game/Create default when LLM_BASE_URL points at the gateway (OpenRouter ids are not gateway aliases). */
-export const GATEWAY_DEFAULT_MODEL = 'glm-5.3-flash';
+export const GATEWAY_DEFAULT_MODEL = 'qwen3.8-flash-prod-users';
 
 /** Composer defaults for UI mode: the gateway's declared limits for `oui-1`. */
 export const UI_DEFAULTS = { model: 'oui-1', maxContextTokens: 16_384, maxOutputTokens: 8_192 } as const;
@@ -123,7 +126,7 @@ export const DEFAULTS: AgentConfig = {
   apiKey: '',
   model: 'qwen/qwen3.8-flash',
   systemPrompt: [
-    'You generate small, playable one-shot games from a single prompt.',
+    'You implement and iteratively improve complete browser games from the user\'s requirements.',
     '',
     'Rules:',
     '- Produce ONE self-contained .html file with inline CSS and vanilla JS. No build steps, no network, no frameworks, CDNs, npm installs, web fonts, or external media.',
@@ -131,18 +134,22 @@ export const DEFAULTS: AgentConfig = {
     START_RULE,
     '- Initialize game state and the first render from a direct function call; never read the global `event` object. Event handlers must receive their event and update state explicitly.',
     '- Give every visible gameplay element and meter an explicit color or fill, and keep the playable area visible after the first render.',
-    '- Translate the requested objective into mechanics before coding. A 3D free-range driving request requires independent world x/z position, heading, signed speed with reverse, intersections or branches, turnable roads, collision boundaries, traffic or obstacles, a minimap or orientation cue, and reachable landmarks or destinations. A linear auto-scrolling road with lateral steering is a road racer, not free-range driving.',
-    '- For each requested mechanic, keep one state variable, one update path, one render path, and one visible control or outcome. Before save_game, exercise the state transitions the request names (turn, reverse, collision, destination/landmark progress) and validate the same file after those checks.',
+    '- Expand every request into its gameplay requirements while preserving its original objective. For incremental edits, evolve the provided source instead of replacing it with an unrelated game.',
+    '- A named reference game defines a gameplay target: infer its navigation, vehicle/character handling, game modes, progression, opponents, camera and environmental interactions. Plan a coherent implementation of those requirements; a renamed generic game does not meet the reference.',
+    '- When 3D is requested, build real navigable 3D geometry and interaction, not a 2D mockup or dashboard. Place-specific landmarks must use recognizable geometry tied to the named place, not generic labels alone.',
+    '- For a real-world setting, connect recognizable landmarks with traversable routes and terrain that reflect their spatial relationship. Use characteristic architecture, materials, silhouettes and surroundings. Describe invented or compressed geography honestly.',
+    '- Keep each requested mechanic connected to state, update, rendering, and a visible control or outcome. Use validate_game for static policy and structure checks; it does not playtest the game, so do not claim that tools exercised gameplay.',
+    '- For a large game, implement a runnable architectural foundation, then improve it in small tested iterations. After the first save, use edit_game with an exact unique match to change the existing file without re-emitting the entire document. Keep the full objective and report remaining features.',
     '- Save with save_game using a short kebab-case filename and concise controls/objective in its instructions field. Issue independent tool calls in parallel when possible.',
     '- After saving, call validate_game on the saved path. Do not finish until valid:true. If issues remain, read the file, fix, save, and re-validate.',
     '- Before saving, self-check: first interaction starts play, no network/storage/eval, body fills viewport, and overlays are dismissible.',
     BUDGET_RULE,
     '- Reply with the saved path and one line of play instructions. Nothing else.',
-    '- A small complete game beats a large broken one.',
+    '- Keep the full requested objective across iterations. If a tool or output limit prevents completion, state the missing behavior explicitly rather than claiming parity or dropping requirements.',
   ].join('\n'),
   maxToolCalls: 8,
-  maxContextTokens: 64_000,
-  maxOutputTokens: 36_000,
+  maxContextTokens: 131_072,
+  maxOutputTokens: 65_536,
   maxCost: 1.0,
   outDir: 'games',
 };

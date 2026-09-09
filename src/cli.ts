@@ -136,7 +136,7 @@ try {
         } else if (event.type === 'done') {
           const s = event.stats;
           process.stderr.write(
-            `\n${s.totalTokens} tokens (${s.reasoningTokens} reasoning) · ${s.toolCalls} tool calls` +
+            `\n${s.totalTokens} tokens (${s.reasoningTokensEstimated ? '~' : ''}${s.reasoningTokens} reasoning${s.reasoningTokensEstimated ? ', estimated' : ', reported'}) · ${s.toolCalls} tool calls` +
             (s.tokensPerSec ? ` · ${s.tokensPerSec} tok/s` : '') +
             (s.ttftMs != null ? ` · ttft ${Math.round(s.ttftMs)}ms` : '') +
             ` · ${(s.durationMs / 1000).toFixed(1)}s` +

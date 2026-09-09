@@ -293,6 +293,112 @@ describe('game storage', () => {
       expect(saved).toEqual([]);
     });
   });
+
+  test('edit_game applies repeated exact replacements and preserves prior instructions', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const saved: Post[] = [];
+      let metadataCall = 0;
+      const [, , , , edit] = makeTools(config, new Budget(8, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: metadataCall++ === 0 ? 'initial prompt' : 'edit prompt', model: 'tool-model', ts: metadataCall }),
+        onSave: (post) => saved.push(post),
+      });
+      const save = makeTools(config, new Budget(2, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'initial prompt', model: 'tool-model', ts: 1 }),
+      })[0];
+      await save.function.execute({ filename: 'editable.html', content: playableHtml, instructions: 'Keep these controls.' });
+
+      expect(await edit.function.execute({ path: join(outDir, 'editable.html'), old_text: 'Play', new_text: 'Start' }))
+        .toMatchObject({ written: true, valid: true });
+      expect(await edit.function.execute({ path: join(outDir, 'editable.html'), old_text: 'Start', new_text: 'Go' }))
+        .toMatchObject({ written: true, valid: true });
+      const restored = await storage.read('editable.html');
+      expect(restored.content).toContain('>Go</button>');
+      expect(restored.post).toMatchObject({ prompt: 'edit prompt', instructions: 'Keep these controls.' });
+      expect(saved).toHaveLength(2);
+    });
+  });
+
+  test('edit_game leaves content and metadata unchanged for missing or ambiguous text', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const saved: Post[] = [];
+      const [save, , , , edit] = makeTools(config, new Budget(8, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'stable prompt', model: 'tool-model', ts: 1 }),
+        onSave: (post) => saved.push(post),
+      });
+      const content = playableHtml.replace('Play', 'TOKEN').replace('</button>', 'TOKEN</button>');
+      await save.function.execute({ filename: 'stable.html', content, instructions: 'Stable controls.' });
+      const before = await storage.read('stable.html');
+
+      expect(await edit.function.execute({ path: join(outDir, 'stable.html'), old_text: 'missing', new_text: 'changed' }))
+        .toMatchObject({ written: false, valid: false, error: expect.stringContaining('not found') });
+      expect(await storage.read('stable.html')).toEqual(before);
+      expect(await edit.function.execute({ path: join(outDir, 'stable.html'), old_text: 'TOKEN', new_text: 'changed' }))
+        .toMatchObject({ written: false, valid: false, error: expect.stringContaining('more than once') });
+      expect(await storage.read('stable.html')).toEqual(before);
+      expect(saved).toHaveLength(1);
+    });
+  });
+
+  test('edit_game rejects invalid reconstructions and path traversal before writing', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const saved: Post[] = [];
+      const [save, , , , edit] = makeTools(config, new Budget(8, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'stable prompt', model: 'tool-model', ts: 1 }),
+        onSave: (post) => saved.push(post),
+      });
+      await save.function.execute({ filename: 'protected.html', content: playableHtml, instructions: 'Stable controls.' });
+      const before = await storage.read('protected.html');
+
+      expect(await edit.function.execute({ path: join(outDir, 'protected.html'), old_text: 'Play', new_text: 'fetch("https://example.com")' }))
+        .toMatchObject({ written: false, valid: false });
+      expect(await storage.read('protected.html')).toEqual(before);
+      expect(await edit.function.execute({ path: join(outDir, '..', 'outside.html'), old_text: 'Play', new_text: 'Changed' }))
+        .toMatchObject({ written: false, error: expect.stringContaining('inside') });
+      expect(await storage.read('protected.html')).toEqual(before);
+      expect(saved).toHaveLength(1);
+    });
+  });
+
+  test('edit_game uses historical adapter content for the first patch and current content thereafter', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const reads: string[] = [];
+      const read = storage.read.bind(storage);
+      storage.read = async (filename, versionId) => {
+        reads.push(versionId ?? 'current');
+        const current = await read(filename);
+        return versionId ? { ...current, content: playableHtml.replace('Play', 'Historical') } : current;
+      };
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const save = makeTools(config, new Budget(2, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'versioned prompt', model: 'tool-model', ts: 1 }),
+      })[0];
+      await save.function.execute({ filename: 'versioned.html', content: playableHtml, instructions: 'Keep controls.' });
+      const [, , , , edit] = makeTools(config, new Budget(4, 10_000, 0), {
+        storage,
+        existingVersionId: 'selected-version',
+        saveMetadata: () => ({ prompt: 'versioned edit', model: 'tool-model', ts: 2 }),
+      });
+
+      expect(await edit.function.execute({ path: join(outDir, 'versioned.html'), old_text: 'Historical', new_text: 'Start' }))
+        .toMatchObject({ written: true, valid: true });
+      expect(await edit.function.execute({ path: join(outDir, 'versioned.html'), old_text: 'Start', new_text: 'Go' }))
+        .toMatchObject({ written: true, valid: true });
+      expect(reads).toEqual(['selected-version', 'current']);
+      expect((await read('versioned.html')).content).toBe(playableHtml.replace('Play', 'Go'));
+    });
+  });
 });
 
 const runStorageIntegration = process.env.RUN_STORAGE_INTEGRATION === '1';

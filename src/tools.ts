@@ -68,6 +68,15 @@ function isAllowedUrl(url: string): boolean {
 }
 
 function validateHtmlGame(content: string, issues: string[]) {
+  for (const [, attributes, source] of content.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+    const type = /\btype\s*=\s*["']([^"']+)["']/i.exec(attributes)?.[1].toLowerCase();
+    if (type && !['module', 'text/javascript', 'application/javascript'].includes(type)) continue;
+    try {
+      new Bun.Transpiler({ loader: 'js' }).transformSync(source);
+    } catch (error) {
+      issues.push(`Inline JavaScript syntax error: ${errorMessage(error)}. Fix the script before saving.`);
+    }
+  }
   if (/(?:grid-template-(?:columns|rows)|grid-auto-(?:columns|rows))\s*:\s*(?:fr\b|repeat\(\s*fr\b)/i.test(content)) {
     issues.push('CSS grid track sizes must include a number before fr (for example 1fr), not a bare fr value.');
   }
@@ -75,13 +84,6 @@ function validateHtmlGame(content: string, issues: string[]) {
   if (/<(?:table|div)[^>]*(?:class|id)\s*=\s*["'][^"']*table-wrapper[^"']*["']/i.test(content) &&
       /<table\b/i.test(content) && !/\.table-wrapper\s*\{[^}]*\boverflow(?:-y)?\s*:/is.test(content)) {
     issues.push('The table wrapper selector must match the HTML class and define overflow on .table-wrapper so rows remain reachable in the viewport.');
-  }
-
-  if (/(?:^|[^\w$.])event\.(?:target|currentTarget)\b/i.test(content)) {
-    issues.push('HTML reads the global event target: pass the event or clicked element explicitly so initial rendering works without a browser event.');
-  }
-  if (/\bsegments\b[\s\S]{0,500}\bplayerX\b/i.test(content) && !/\b(?:worldX|worldZ|playerZ|carX|carZ|vehicleX|vehicleZ)\b/i.test(content)) {
-    issues.push('Free-range driving cannot be implemented as a linear segment loop with lateral playerX movement.');
   }
 
   const rendersBars = /(?:className|classList\.add|class\s*=)[^\n;]{0,80}\bbar\b/i.test(content);
@@ -123,7 +125,7 @@ function validateHtmlGame(content: string, issues: string[]) {
   if (/(?:^|[^\w.])(?:window|globalThis)\s*\.\s*(?:localStorage|sessionStorage)\s*[.(]/i.test(content)) {
     issues.push('HTML accesses localStorage/sessionStorage through window/globalThis: storage APIs throw in the gallery iframe.');
   }
-  if (/(?:^|[^\w.])innerHTML\s*=/i.test(content) || /(?:^|[^\w.])outerHTML\s*=/i.test(content)) {
+  if (/\b(?:innerHTML|outerHTML)\s*(?:\+=|-=|\*=|\/=|%=|&&=|\|\|=|\?\?=|=(?!=))/i.test(content)) {
     issues.push('HTML assigns to innerHTML/outerHTML: use textContent or create DOM nodes to avoid injection sinks.');
   }
   if (/(?:^|[^\w.])eval\s*\(/i.test(content) || /(?:^|[^\w.])Function\s*\(/.test(content)) {
@@ -178,20 +180,6 @@ function validateHtmlGame(content: string, issues: string[]) {
   if (!hasInput) issues.push('Game must have at least one input handler (click, pointerdown, touchstart, or keydown).');
 }
 
-function validateFreeRoamGame(prompt: string, content: string, issues: string[]) {
-  if (!/\b(?:3d|drivable|driving|free[- ]?range|streets?|vehicle|car)\b/i.test(prompt) && !/\bsegments\b[\s\S]{0,500}\bplayerX\b/i.test(content)) return;
-  const hasWorldCoordinates = /\b(?:worldX|worldZ|playerZ|carX|carZ|vehicleX|vehicleZ)\b|\b(?:world|player|car|vehicle)\w*\s*\.?(?:x|z)\b/i.test(content);
-  const hasHeading = /\b(?:heading|yaw|rotation|angle)\b/i.test(content);
-  const hasRoadChoice = /\b(?:intersection|intersections|branch|branches|roadGraph|turnLeft|turnRight|junction)\b/i.test(content);
-  const hasOrientation = /\b(?:minimap|mini-map|compass|heading)\b/i.test(content);
-  if (/(?:\bsegments\b|\bposition\b)[\s\S]{0,500}\bplayerX\b/i.test(content) && !hasWorldCoordinates) {
-    issues.push('Free-range driving cannot be implemented as a linear segment loop with lateral playerX movement.');
-  }
-  if (!hasWorldCoordinates || !hasHeading || !hasRoadChoice || !hasOrientation) {
-    issues.push('Free-range 3D driving requires world coordinates, heading, intersecting roads or branches, and an orientation/minimap cue.');
-  }
-}
-
 function validateJsGame(content: string, issues: string[]) {
   const requireCalls = [...content.matchAll(/(?:^|[^\w.])require\s*\(\s*["']([^"']+)["']\s*\)/g)];
   for (const match of requireCalls) {
@@ -227,7 +215,7 @@ function validateJsGame(content: string, issues: string[]) {
   }
 }
 
-/** Check game content for playability and policy issues. */
+/** Check game content for static format and policy issues. Runtime behavior needs browser verification. */
 export function validateGameContent(path: string, content: string): { valid: boolean; issues: string[] } {
   const issues: string[] = [];
   if (content.trim().length === 0) {
@@ -248,7 +236,7 @@ export function validateGameContent(path: string, content: string): { valid: boo
   return { valid: issues.length === 0, issues };
 }
 
-/** Check a local fixture file for playability and policy issues. */
+/** Check a local fixture file for static format and policy issues. */
 export async function validateGameFile(path: string): Promise<{ valid: boolean; issues: string[] }> {
   return validateGameContent(path, await Bun.file(path).text());
 }
@@ -269,6 +257,7 @@ function errorMessage(error: unknown): string {
 
 export type MakeToolsOptions = {
   storage?: GameStorage;
+  existingVersionId?: string;
   wantedFilename?: string;
   saveMetadata?: () => Omit<SavePost, 'instructions'>;
   onSave?: (post: Post) => void;
@@ -288,6 +277,17 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
   // Names this run already saved (requested → stored), so a fix-and-resave overwrites instead of forking "-2".
   const ownNames = new Map<string, string>();
   let lastTarget: string | undefined;
+  const saveContent = async (target: string, content: string, metadata: SavePost, instructions: string, overwrite: boolean, requestedName = target) => {
+    const validation = validateGameContent(target, content);
+    if (!validation.valid) {
+      return budget.charge({ written: false, valid: false, issues: validation.issues, hint: 'Fix these issues and save again with the same filename.' });
+    }
+    const post = await storage.save(target, content, { ...metadata, instructions }, overwrite);
+    ownNames.set(requestedName, target).set(target, target);
+    lastTarget = target;
+    options.onSave?.(post);
+    return budget.charge({ written: true, path: `${config.outDir}/${target}`, valid: true });
+  };
   return [
     tool({
       name: 'save_game',
@@ -307,26 +307,15 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
         if (!GAME_FILENAME.test(options.wantedFilename ?? filename)) {
           return budget.charge({ error: `Invalid filename ${JSON.stringify(filename)}: must match ${GAME_FILENAME}` });
         }
-        const semanticIssues: string[] = [];
-        validateFreeRoamGame(metadata.prompt, content, semanticIssues);
-        if (semanticIssues.length) return budget.charge({ written: false, valid: false, issues: semanticIssues, hint: 'Implement the requested world mechanics and save again.' });
         // A requested name (new or Improve) is used as-is; a model-picked name gets a unique suffix on collision.
         const target = options.wantedFilename ?? ownNames.get(filename) ?? await storage.uniqueName(filename);
-        const validation = validateGameContent(target, content);
-        if (!validation.valid) {
-          return budget.charge({ written: false, valid: false, issues: validation.issues, hint: 'Fix these issues and save again with the same filename.' });
-        }
-        const post = await storage.save(target, content, { ...metadata, instructions }, options.overwrite || ownNames.has(target));
-        ownNames.set(filename, target).set(target, target);
-        lastTarget = target;
-        options.onSave?.(post);
-        return budget.charge({ written: true, path: `${config.outDir}/${target}`, valid: true });
+        return saveContent(target, content, metadata, instructions, options.overwrite || ownNames.has(target), filename);
       },
     }),
 
     tool({
       name: 'validate_game',
-      description: 'Check a saved game for playability and policy issues (external resources, dismissible overlay, input handlers, etc.). Call this after every save_game and fix any issues before replying.',
+      description: 'Check a saved game for static format and policy issues (for example external resources, overlay wiring, and input-handler presence). It cannot prove runtime behavior; use browser testing for that. Call this after every save_game and fix any reported issues before replying.',
       inputSchema: z.object({
         path: z.string().describe('Path to the saved game, e.g. "games/bunnies.html"'),
       }),
@@ -389,6 +378,46 @@ export function makeTools(config: AgentConfig, budget: Budget, options: MakeTool
           return budget.charge({ entries });
         } catch (error) {
           return budget.charge({ error: errorMessage(error) });
+        }
+      },
+    }),
+
+    tool({
+      name: 'edit_game',
+      description: `Apply one exact text replacement to an existing game in ${config.outDir}/. The old_text must occur exactly once; the reconstructed file passes static validation before it overwrites the same game. This cannot prove runtime behavior; use browser testing for that.`,
+      inputSchema: z.object({
+        path: z.string().describe('Path to the saved game, e.g. "games/bunnies.html"'),
+        old_text: z.string().min(1).describe('Non-empty text that must occur exactly once'),
+        new_text: z.string().describe('Replacement text'),
+      }),
+      execute: async ({ path, old_text, new_text }) => {
+        const limit = budget.take();
+        if (limit) return { error: limit };
+        try {
+          if (!old_text) {
+            return budget.charge({ written: false, valid: false, error: 'old_text must be non-empty; no changes were written.' });
+          }
+          const filename = gameFilename(path, config.outDir);
+          if (options.wantedFilename && filename !== options.wantedFilename) {
+            return budget.charge({ written: false, error: `Edit path ${JSON.stringify(filename)} does not match the requested filename ${JSON.stringify(options.wantedFilename)}.` });
+          }
+          if (!GAME_FILENAME.test(options.wantedFilename ?? filename)) {
+            return budget.charge({ written: false, error: `Invalid filename ${JSON.stringify(filename)}: must match ${GAME_FILENAME}` });
+          }
+          const existing = await storage.read(filename, ownNames.has(filename) ? undefined : options.existingVersionId);
+          const first = existing.content.indexOf(old_text);
+          if (first < 0) {
+            return budget.charge({ written: false, valid: false, error: `old_text was not found in ${filename}; no changes were written.` });
+          }
+          if (existing.content.indexOf(old_text, first + 1) >= 0) {
+            return budget.charge({ written: false, valid: false, error: `old_text occurs more than once in ${filename}; provide a unique exact snippet. No changes were written.` });
+          }
+          const content = existing.content.slice(0, first) + new_text + existing.content.slice(first + old_text.length);
+          const metadata = saveMetadata();
+          const instructions = existing.post.instructions ?? metadata.prompt.slice(0, 500);
+          return saveContent(filename, content, metadata, instructions, true);
+        } catch (error) {
+          return budget.charge({ written: false, error: errorMessage(error) });
         }
       },
     }),

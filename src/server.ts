@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { readFileSync } from 'node:fs';
-import { CREATE_SYSTEM_PROMPT, UI_DEFAULTS, UI_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
+import { CREATE_SYSTEM_PROMPT, UI_DEFAULTS, UI_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig, type AgentMode } from './config.js';
 import { runAgent } from './agent.js';
 import { CHARS_PER_TOKEN } from './tools.js';
 import { createGameStorage, GAME_FILENAME, paginateFeed, parseFeedLimit } from './storage.js';
@@ -31,15 +31,10 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'NoSuchKey');
 }
 
-function enrichGamePrompt(prompt: string, mode: string | undefined): string {
-  if (mode !== 'game' || !/\b(?:3d|drivable|driving|free[- ]?range|streets?|car|vehicle)\b/i.test(prompt)) return prompt;
-  return `${prompt}\n\nGame acceptance contract: translate this objective into a playable world, not a dashboard or an auto-scrolling road. Use independent world x/z position, heading, signed speed with reverse, an intersecting or branching road graph with turn choices, collision boundaries, traffic or obstacles, an orientation/minimap cue, and reachable named landmarks or destinations. Keep each mechanic connected to state, update, rendering, and visible controls. Before saving, exercise acceleration, steering through a turn, reverse, collision handling, and landmark progress; preserve the same filename and validate it.`;
-}
-
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
   idleTimeout: 255, // generation runs minutes; default 10s kills the NDJSON stream
-  async fetch(req) {
+  async fetch(req, server) {
     const url = new URL(req.url);
 
     if (url.pathname === '/') {
@@ -163,40 +158,13 @@ const server = Bun.serve({
     }
 
     if (url.pathname === '/api/generate' && req.method === 'POST') {
+      server.timeout(req, 0);
       const body = await req.json().catch(() => ({}));
       const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
       if (!prompt) return json({ error: 'prompt is required' }, 400);
 
-      const mode = body.mode === 'game' || body.mode === 'create' || body.mode === 'ui' ? body.mode : undefined;
-      const effectivePrompt = enrichGamePrompt(prompt, mode);
-      const overrides: Partial<AgentConfig> = {};
-      try {
-        for (const key of ['systemPrompt', 'model'] as const) {
-          if (typeof body[key] === 'string' && body[key].trim()) overrides[key] = body[key].trim();
-        }
-        if (mode === 'game') {
-          overrides.systemPrompt = defaults.systemPrompt;
-          overrides.model = defaults.model;
-        } else if (mode === 'create') {
-          overrides.systemPrompt = CREATE_SYSTEM_PROMPT;
-          overrides.model = defaults.model;
-        } else if (mode === 'ui') {
-          overrides.systemPrompt = UI_SYSTEM_PROMPT;
-          overrides.model = UI_DEFAULTS.model;
-          overrides.maxContextTokens = UI_DEFAULTS.maxContextTokens;
-          overrides.maxOutputTokens = UI_DEFAULTS.maxOutputTokens;
-        }
-        for (const key of ['maxToolCalls', 'maxContextTokens', 'maxOutputTokens', 'maxReasoningTokens', 'maxCost'] as const) {
-          if (body[key] != null && body[key] !== '') overrides[key] = positiveNumber(key, String(body[key]));
-        }
-        if (typeof body.reasoningEffort === 'string' && body.reasoningEffort) {
-          overrides.reasoningEffort = reasoningEffort('reasoningEffort', body.reasoningEffort);
-        }
-      } catch (err: any) {
-        return json({ error: err.message }, 400);
-      }
-
-        const existingFile = typeof body.existingFile === 'string' && body.existingFile.trim() ? body.existingFile.trim() : null;
+      const requestedMode = body.mode === 'game' || body.mode === 'create' || body.mode === 'ui' ? body.mode : undefined;
+      const existingFile = typeof body.existingFile === 'string' && body.existingFile.trim() ? body.existingFile.trim() : null;
       if (existingFile && !GAME_FILENAME.test(existingFile)) {
         return json({ error: `existingFile must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
       }
@@ -210,6 +178,40 @@ const server = Bun.serve({
         return json({ error: `game ${JSON.stringify(wantedFile)} already exists; use Improve to change it or pick another filename` }, 409);
       }
 
+      let existing: { content: string; post: { prompt: string; instructions?: string; settings?: { mode?: AgentMode } } } | undefined;
+      if (existingFile) {
+        try {
+          existing = await storage.read(existingFile, existingVersionId);
+        } catch (error) {
+          if (isMissing(error)) return json({ error: `game not found: ${existingFile}` }, 404);
+          return json({ error: errorMessage(error) }, 502);
+        }
+      }
+      const mode = requestedMode ?? existing?.post.settings?.mode ?? 'game';
+      const overrides: Partial<AgentConfig> = { mode };
+      try {
+        for (const key of ['systemPrompt', 'model'] as const) {
+          if (typeof body[key] === 'string' && body[key].trim()) overrides[key] = body[key].trim();
+        }
+        for (const key of ['maxToolCalls', 'maxContextTokens', 'maxOutputTokens', 'maxReasoningTokens', 'maxCost'] as const) {
+          if (body[key] != null && body[key] !== '') overrides[key] = positiveNumber(key, String(body[key]));
+        }
+        if (typeof body.reasoningEffort === 'string' && body.reasoningEffort) {
+          overrides.reasoningEffort = reasoningEffort('reasoningEffort', body.reasoningEffort);
+        }
+        if (mode === 'create') {
+          overrides.systemPrompt ??= CREATE_SYSTEM_PROMPT;
+          overrides.model ??= defaults.model;
+        } else if (mode === 'ui') {
+          overrides.systemPrompt ??= UI_SYSTEM_PROMPT;
+          overrides.model ??= UI_DEFAULTS.model;
+          overrides.maxContextTokens ??= UI_DEFAULTS.maxContextTokens;
+          overrides.maxOutputTokens ??= UI_DEFAULTS.maxOutputTokens;
+        }
+      } catch (err: any) {
+        return json({ error: err.message }, 400);
+      }
+
       let config: AgentConfig;
       try {
         config = loadConfig(overrides);
@@ -218,35 +220,39 @@ const server = Bun.serve({
       }
 
       let fullPrompt: string;
-      if (existingFile) {
-        let existing: { content: string; post: { prompt: string; instructions?: string } };
-        try {
-          existing = await storage.read(existingFile, existingVersionId);
-        } catch (error) {
-          if (isMissing(error)) return json({ error: `game not found: ${existingFile}` }, 404);
-          return json({ error: errorMessage(error) }, 502);
-        }
+      let savePrompt: string;
+      if (existingFile && existing) {
         const originalInstructions = existing.post.instructions ?? 'none';
         // The source goes in the prompt as plain text. A read_file result is a JSON string, and small models
         // (oui-1) copy its \n and \" escapes into save_game content verbatim, saving an unrenderable document.
-        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nIts complete current source follows; do not call read_file.\n\n${existing.content}\n\nApply this change request to that source and overwrite the same file with save_game (use the same filename "${existingFile}" and pass the whole updated document as content). Validate the result with validate_game before finishing.\n\nChange request: ${effectivePrompt}`;
+        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nIts complete current source follows; do not call read_file.\n\n${existing.content}\n\nApply this change request to that source and overwrite the same file with save_game (use the same filename "${existingFile}" and pass the whole updated document as content). Validate the result with validate_game before finishing.\n\nChange request: ${prompt}`;
+        savePrompt = `${existing.post.prompt}\n\n${prompt}`;
       } else {
-        fullPrompt = wantedFile ? `${effectivePrompt}\n\nSave the file as exactly "${wantedFile}".` : effectivePrompt;
+        fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
+        savePrompt = prompt;
       }
 
       // Late callbacks (onTurnEnd metadata) and client disconnects must never enqueue on a closed
       // controller: that throw escaped the handler and exited the process (ERR_INVALID_STATE, 2026-09-08).
       let open = true;
       const abort = new AbortController();
+      let heartbeat: ReturnType<typeof setInterval> | undefined;
+      const stopHeartbeat = () => {
+        if (heartbeat) clearInterval(heartbeat);
+        heartbeat = undefined;
+      };
       const stream = new ReadableStream({
         async start(controller) {
           const enc = new TextEncoder();
           const send = (o: unknown) => { if (open) controller.enqueue(enc.encode(JSON.stringify(o) + '\n')); };
+          heartbeat = setInterval(() => { if (open) controller.enqueue(enc.encode('\n')); }, 5_000);
+          send({ type: 'status', message: 'Generating...' });
           try {
             const { savedPosts } = await runAgent(config, fullPrompt, {
               storage,
               wantedFilename: targetFile,
-              savePrompt: prompt,
+              existingVersionId,
+              savePrompt,
               overwrite: Boolean(existingFile),
               onEvent: send,
               signal: abort.signal,
@@ -254,10 +260,12 @@ const server = Bun.serve({
             for (const post of savedPosts) send({ type: 'post', post });
           } catch (error) {
             send({ type: 'error', message: errorMessage(error) });
+          } finally {
+            stopHeartbeat();
           }
           if (open) { open = false; controller.close(); }
         },
-        cancel() { open = false; abort.abort(); },
+        cancel() { open = false; stopHeartbeat(); abort.abort(); },
       });
       return new Response(stream, { headers: { 'content-type': 'application/x-ndjson' } });
     }

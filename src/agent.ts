@@ -45,6 +45,7 @@ export type RunStats = BaseUsage & {
   ttftMs: number | null;
   /** Run-wide totals aggregated across every model call. */
   reasoningTokens: number;
+  reasoningTokensEstimated?: boolean;
   toolCalls: number;
   durationMs: number;
   cost: number | null;
@@ -57,6 +58,7 @@ export type RunAgentOptions = {
   signal?: AbortSignal;
   storage?: GameStorage;
   wantedFilename?: string;
+  existingVersionId?: string;
   savePrompt?: string;
   overwrite?: boolean;
 };
@@ -126,6 +128,7 @@ export async function runAgent(
       tools: makeTools(config, budget, {
         storage,
         wantedFilename: options?.wantedFilename,
+        existingVersionId: options?.existingVersionId,
         overwrite: options?.overwrite,
         saveMetadata: () => ({
           prompt: savePrompt,
@@ -133,6 +136,7 @@ export async function runAgent(
           ts: Date.now(),
           runId,
           settings: {
+            mode: config.mode,
             model: config.model,
             reasoningEffort: config.reasoningEffort,
             maxToolCalls: config.maxToolCalls,
@@ -209,7 +213,7 @@ export async function runAgent(
 
   try {
     if (options?.onEvent) {
-      // Run three streams concurrently: getTextStream / getReasoningStream
+      // Run three streams concurrently: text / reasoning deltas
       // for true deltas and getItemsStream filtered to tool events. The
       // SDK's ReusableReadableStream allows concurrent consumption.
       // getItemsStream must NOT be used for reasoning text: it yields items
@@ -218,8 +222,10 @@ export async function runAgent(
       const callNames = new Map<string, string>();
 
       const streamReasoning = async () => {
-        for await (const delta of result.getReasoningStream()) {
+        for await (const event of result.getFullResponsesStream()) {
           if (options?.signal?.aborted) break;
+          if (event.type !== 'response.reasoning_text.delta' && event.type !== 'response.reasoning_summary_text.delta') continue;
+          const delta = event.delta;
           firstTokenAt ??= Date.now();
           reasoningChars += delta.length;
           options.onEvent!({ type: 'reasoning', delta });
@@ -294,7 +300,7 @@ export async function runAgent(
         generation?.generationTime && generation.nativeTokensCompletion
           ? Math.round((generation.nativeTokensCompletion / generation.generationTime) * 1000)
           : null,
-      usage: { ...totals, reasoningTokens: totals.reasoningTokens || Math.ceil(reasoningChars / CHARS_PER_TOKEN) },
+      usage: totals,
       cost: gatewayCost ?? totals.cost ?? null,
     });
     await persistStats(stats);
@@ -323,7 +329,8 @@ export async function runAgent(
       inputTokens: parts.usage.inputTokens,
       outputTokens: parts.usage.outputTokens,
       totalTokens: parts.usage.totalTokens,
-      reasoningTokens: parts.usage.reasoningTokens,
+      reasoningTokens: parts.usage.reasoningTokens || Math.ceil(reasoningChars / CHARS_PER_TOKEN),
+      reasoningTokensEstimated: !parts.usage.reasoningTokens && reasoningChars > 0,
       toolCalls: budget.callCount,
       durationMs,
       cost: parts.cost,

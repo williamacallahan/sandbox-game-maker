@@ -14,7 +14,7 @@ export type Post = {
   model: string;
   ts: number;
   instructions?: string;
-  settings?: Pick<AgentConfig, 'model' | 'reasoningEffort' | 'maxToolCalls' | 'maxContextTokens' | 'maxOutputTokens' | 'maxReasoningTokens' | 'maxCost' | 'systemPrompt'>;
+  settings?: Pick<AgentConfig, 'mode' | 'model' | 'reasoningEffort' | 'maxToolCalls' | 'maxContextTokens' | 'maxOutputTokens' | 'maxReasoningTokens' | 'maxCost' | 'systemPrompt'>;
   stats?: RunStats | null;
 };
 type Record = { content: string; post: Post; statsRunId?: string };
