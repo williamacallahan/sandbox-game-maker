@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { expect, spyOn, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,7 +13,7 @@ type Harness = {
   outDir: string;
   storage: GameStorage;
   requests: Record<string, unknown>[];
-  run: (options?: Pick<RunAgentOptions, 'onEvent'>) => ReturnType<typeof runAgent>;
+  run: (options?: Pick<RunAgentOptions, 'onEvent' | 'signal'>) => ReturnType<typeof runAgent>;
 };
 
 function response(output: unknown[], status: 'completed' | 'incomplete' = 'completed') {
@@ -154,7 +154,7 @@ for (const ending of ['eof', 'done'] as const) {
     await withHarness([
       () => sse(functionEvents([functionCall('save_game', saveArguments(`${ending}.html`))]), ending),
     ], async ({ run, storage }) => {
-      await expect(run()).rejects.toThrow();
+      await expect(run({ onEvent: () => {} })).rejects.toThrow();
       expect(await storage.exists(`${ending}.html`)).toBe(false);
     });
   });
@@ -189,7 +189,11 @@ for (const [label, argumentsJson, filename] of [
       () => streamedFunctionResponse([functionCall('save_game', argumentsJson)]),
       completedTextResponse,
     ], async ({ run, storage }) => {
-      await run();
+      const errors = spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await run();
+        if (label === 'malformed JSON') expect(errors).toHaveBeenCalled();
+      } finally { errors.mockRestore(); }
       expect(await storage.exists(filename)).toBe(false);
     });
   });
@@ -224,3 +228,25 @@ test('executes completed edit_game calls in order', async () => {
     expect(edited.content).not.toContain('>B<');
   });
 });
+
+for (const during of ['name lookup', 'edit read'] as const) {
+  test(`cancellation during ${during} leaves the pending write unapplied`, async () => {
+    const replies: Reply[] = [];
+    await withHarness(replies, async ({ run, storage, outDir }) => {
+      const abort = new AbortController();
+      if (during === 'name lookup') {
+        const lookup = storage.uniqueName.bind(storage);
+        storage.uniqueName = async (name) => { const result = await lookup(name); abort.abort(); return result; };
+        replies.push(() => streamedFunctionResponse([functionCall('save_game', saveArguments('cancelled.html'))]));
+      } else {
+        await storage.save('cancelled.html', GAME_SOURCE, { prompt: 'initial', model: 'test', ts: 1 });
+        const read = storage.read.bind(storage);
+        storage.read = async (...args) => { const result = await read(...args); abort.abort(); return result; };
+        replies.push(() => streamedFunctionResponse([functionCall('edit_game', JSON.stringify({path:join(outDir,'cancelled.html'),old_text:'>A<',new_text:'>B<'}))]));
+      }
+      await expect(run({ signal: abort.signal, onEvent: () => {} })).rejects.toThrow();
+      if (during === 'name lookup') expect(await storage.exists('cancelled.html')).toBe(false);
+      else expect((await storage.read('cancelled.html')).content).toBe(GAME_SOURCE);
+    });
+  });
+}
