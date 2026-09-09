@@ -6,6 +6,7 @@ import type { AfterSuccessHook } from '@openrouter/sdk/hooks/types.js';
 import type { OpenRouterMetadata } from '@openrouter/sdk/models/openroutermetadata.js';
 import { unwrapAsync } from '@openrouter/sdk/types/fp.js';
 import { z } from 'zod';
+import { EventStream } from '@openrouter/sdk/lib/event-streams.js';
 import type { AgentConfig } from './config.js';
 import { Budget, CHARS_PER_TOKEN, makeTools } from './tools.js';
 import { createGameStorage, type GameStorage, type Post } from './storage.js';
@@ -96,14 +97,48 @@ export async function runAgent(
   const savePrompt = options?.savePrompt ?? (typeof input === 'string' ? input : input.findLast((message) => message.role === 'user')?.content ?? '');
   let providerFromHeaders: string | null = null;
   let upstreamCost: number | null = null;
+  let invalidResponseError: Error | null = null;
   // Running totals from onTurnEnd, so a run that fails after save_game still records its usage.
   const turnTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reasoningTokens: 0, cost: 0, costSeen: false };
   let statsSaved = false;
   const headers: Record<string, string> = cacheKey ? { 'X-LGW-Cache-Key': cacheKey } : { 'X-OpenRouter-Metadata': 'enabled' };
   const responseHook: AfterSuccessHook = {
-    afterSuccess: (_ctx, response) => {
+    afterSuccess: async (context, response) => {
       providerFromHeaders = response.headers.get('x-lgw-attempt-providers')?.split(',').at(-1) ?? null;
-      return response;
+      if (context.operationID !== 'createResponses') return response;
+      const completed = z.object({ status: z.literal('completed') });
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        const body = await response.text();
+        if (!completed.safeParse(JSON.parse(body)).success) throw new Error('Model response did not complete; no tools from this response were applied.');
+        return new Response(body, response);
+      }
+      if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+        throw new Error('Expected a Responses API completion stream.');
+      }
+      let finished = false;
+      const encoder = new TextEncoder();
+      const eventHeader = z.object({ type: z.string(), response: z.unknown().optional() });
+      const events = new EventStream<Uint8Array>(response.body, ({ data }) => {
+        if (data === '[DONE]') {
+          if (!finished) throw new Error('Model stream ended without response.completed; no tools from this response were applied.');
+          return { done: true, value: undefined };
+        }
+        const event = eventHeader.parse(JSON.parse(data!));
+        if (['response.incomplete', 'response.failed', 'error'].includes(event.type)) {
+          invalidResponseError = new Error(`Model sent ${event.type}; no tools from this response were applied. Retry with smaller edits.`);
+          finished = true;
+          return { done: false, value: encoder.encode(`data: ${JSON.stringify({ type: 'response.completed', response: { ...(event.response as object ?? {}), status: 'completed', output: [] } })}\n\n`) };
+        }
+        if (event.type === 'response.completed') {
+          if (!completed.safeParse(event.response).success) throw new Error('Model response.completed contained an incomplete response.');
+          finished = true;
+        }
+        return { done: false, value: encoder.encode(`data: ${data}\n\n`) };
+      });
+      return new Response(events.pipeThrough(new TransformStream({
+        transform(chunk, controller) { controller.enqueue(chunk); },
+        flush() { if (!finished) throw new Error('Model stream ended without response.completed; no tools from this response were applied.'); },
+      })), response);
     },
   };
   const client = new OpenRouter({
@@ -118,6 +153,9 @@ export async function runAgent(
   const result = client.callModel(
     {
       model: config.model,
+      toolChoice: 'auto',
+      parallelToolCalls: false,
+      toolConcurrency: 1,
       instructions: config.systemPrompt,
       ...(!config.baseUrl && { provider: { order: ['groq', 'venice'], allowFallbacks: true } }),
       ...(config.maxOutputTokens && { maxOutputTokens: config.maxOutputTokens }),
@@ -270,6 +308,9 @@ export async function runAgent(
     }
 
     const response = await result.getResponse();
+    options?.signal?.throwIfAborted();
+    if (invalidResponseError) throw invalidResponseError;
+    if (response.status !== 'completed') throw new Error('Model response did not complete.');
     const totals = await result.getUsage();
     const durationMs = Date.now() - startedAt;
     let gatewayCost: number | null = null;
@@ -308,6 +349,7 @@ export async function runAgent(
     options?.onEvent?.({ type: 'done', durationMs, stats });
     return { text, output: response.output, durationMs, stats, savedPosts };
   } catch (error) {
+    result.cancel();
     // The file is already in the gallery; keep the usage we saw instead of leaving its Details empty.
     if (savedPosts.length && !statsSaved) {
       const stats = buildStats({ provider: providerFromHeaders, reportedTokensPerSec: null, usage: turnTotals, cost: turnTotals.costSeen ? turnTotals.cost : null });

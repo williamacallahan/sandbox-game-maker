@@ -225,7 +225,7 @@ const server = Bun.serve({
         const originalInstructions = existing.post.instructions ?? 'none';
         // The source goes in the prompt as plain text. A read_file result is a JSON string, and small models
         // (oui-1) copy its \n and \" escapes into save_game content verbatim, saving an unrenderable document.
-        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nIts complete current source follows; do not call read_file.\n\n${existing.content}\n\nApply this change request to that source and overwrite the same file with save_game (use the same filename "${existingFile}" and pass the whole updated document as content). Validate the result with validate_game before finishing.\n\nChange request: ${prompt}`;
+        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nIts complete current source follows; do not call read_file.\n\n${existing.content}\n\nApply this change request with edit_game to "games/${existingFile}" using small exact unique replacements. Preserve unrelated source and split large changes across multiple bounded edits; do not re-emit the whole document with save_game. Each edit must leave a valid runnable file. Validate the result with validate_game before finishing.\n\nChange request: ${prompt}`;
         savePrompt = `${existing.post.prompt}\n\n${prompt}`;
       } else {
         fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;

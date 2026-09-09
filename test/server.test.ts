@@ -105,6 +105,8 @@ describe('POST /api/generate (Improve)', () => {
     expect(sent.input).toContain(SOURCE);
     expect(sent.input).toContain('Change request: add a toolbar');
     expect(sent.input).toContain('do not call read_file');
+    expect(sent.input).toContain('Apply this change request with edit_game');
+    expect(sent.input).toContain('do not re-emit the whole document with save_game');
   });
 
   test('POST /api/versions/<file>?versionId= makes that version current', async () => {
@@ -148,13 +150,15 @@ describe('POST /api/generate (Improve)', () => {
     expect((await second.json()).posts).toContainEqual(expect.objectContaining({ file: 'cached-feed.html', prompt: 'cached feed prompt' }));
   });
 
-  test('preserves custom Improve model and system prompt', async () => {
+  test.each(['game', 'create', 'ui'])('preserves custom Improve model and system prompt in %s mode', async (mode) => {
     const before = upstreamBodies.length;
     const customPrompt = 'custom instructions';
-    const { status } = await improve({ mode: 'game', model: 'custom-model', systemPrompt: customPrompt, maxContextTokens: 12345, maxOutputTokens: 4567 });
+    const { status } = await improve({ mode, model: 'qwen3.8-flash-prod-users', systemPrompt: customPrompt, maxContextTokens: 12345, maxOutputTokens: 4567 });
     expect(status).toBe(200);
     const sent = upstreamBodies[before];
-    expect(sent.model).toBe('custom-model');
+    expect(sent.model).toBe('qwen3.8-flash-prod-users');
+    expect(sent.tool_choice).toBe('auto');
+    expect(sent.parallel_tool_calls).toBe(false);
     expect(sent.instructions).toBe(customPrompt);
     expect(sent.max_output_tokens).toBe(4567);
     expect(sent.input).toContain('add a toolbar');

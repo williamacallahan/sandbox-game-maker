@@ -50,6 +50,7 @@ const BUDGET_RULE = '- Tool calls and context are budgeted. If a tool returns a 
 
 /** Safety, rendering, and interaction rules shared by the game, create, and UI prompts. */
 const SHARED_GAME_RULES = [
+  '- Respect tool input length limits. Save a small runnable foundation, then use edit_game for small exact unique replacements. Split large changes into sequential edits that each leave a valid file; preserve the complete objective and report any unfinished work.',
   '- One self-contained file, zero build steps/network. Inline CSS/JS. No frameworks, CDNs, npm, web fonts, or external media.',
   '- No localStorage/sessionStorage, innerHTML/outerHTML, eval/new Function, document.write, or string-argument setTimeout/setInterval.',
   '- Fill the square (1:1) viewport exactly. Body must use `margin:0; overflow:hidden` and set `width/height` (or `min-width/min-height`) to `100vw/100vh`. Size a canvas to `window.innerWidth/Height` on load and resize. No scrollbars, no letterboxing, no fixed page dimensions.',
@@ -145,7 +146,7 @@ export const DEFAULTS: AgentConfig = {
     '- Before saving, self-audit robustness: every world coordinate and projected depth must be finite; near-plane clipping must reject only faces wholly behind the camera; respawn must choose a drivable non-solid point; terrain, drawing, collisions, and minimap must read the same world data. These checks do not replace browser playtesting.',
     '- For a large game, implement a runnable architectural foundation, then improve it in small tested iterations. After the first save, use edit_game with an exact unique match to change the existing file without re-emitting the entire document. Keep the full objective and report remaining features.',
     '- Every saved edit must remain executable on its own. Introduce declarations before their uses, or change both together in one replacement. Do not leave a broken intermediate state awaiting a later tool call: the call budget may end between edits.',
-    '- Save with save_game using a short kebab-case filename and concise controls/objective in its instructions field. Issue independent tool calls in parallel when possible.',
+    '- Save with save_game using a short kebab-case filename and concise controls/objective in its instructions field. Apply edits sequentially so each replacement uses the latest saved source.',
     '- After saving, call validate_game on the saved path. Do not finish until valid:true. If issues remain, read the file, fix, save, and re-validate.',
     '- Before saving, self-check: first interaction starts play, no network/storage/eval, body fills viewport, and overlays are dismissible.',
     BUDGET_RULE,

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import type { RunStats } from '../src/agent.js';
 import { loadConfig } from '../src/config.js';
 import { createGameStorage, type Post, type SavePost } from '../src/storage.js';
-import { Budget, makeTools } from '../src/tools.js';
+import { Budget, makeTools, MAX_EDIT_CHARS, MAX_SAVE_CHARS } from '../src/tools.js';
 
 async function withOutDir<T>(body: (outDir: string) => Promise<T>) {
   const outDir = await mkdtemp(join(tmpdir(), 'game-storage-'));
@@ -294,6 +294,38 @@ describe('game storage', () => {
     });
   });
 
+  test('bounds save_game content before storage and accepts the maximum', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const [save] = makeTools(config, new Budget(4, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'bounded save', model: 'tool-model', ts: 1 }),
+      });
+      const content = playableHtml + ' '.repeat(MAX_SAVE_CHARS - playableHtml.length);
+      const tooLarge = `${content} `;
+      const uniqueName = storage.uniqueName.bind(storage);
+      let uniqueNameCalls = 0;
+      storage.uniqueName = async (filename) => {
+        uniqueNameCalls++;
+        return uniqueName(filename);
+      };
+
+      expect(content).toHaveLength(MAX_SAVE_CHARS);
+      expect(save.function.inputSchema.safeParse({ filename: 'maximum-save.html', content }).success).toBe(true);
+      const rejectedSave = save.function.inputSchema.safeParse({ filename: 'oversize-save.html', content: tooLarge });
+      expect(rejectedSave.success).toBe(false);
+      if (rejectedSave.success) throw new Error('Expected oversized save content to fail validation.');
+      expect(rejectedSave.error.issues[0]?.message).toContain('no changes written');
+      expect(await save.function.execute({ filename: 'maximum-save.html', content, instructions: 'Click play.' }))
+        .toMatchObject({ written: true, valid: true });
+      expect(await save.function.execute({ filename: 'oversize-save.html', content: tooLarge, instructions: 'Click play.' }))
+        .toMatchObject({ written: false, valid: false, error: expect.stringContaining('no changes written') });
+      expect(uniqueNameCalls).toBe(1);
+      expect(await storage.exists('oversize-save.html')).toBe(false);
+    });
+  });
+
   test('edit_game applies repeated exact replacements and preserves prior instructions', async () => {
     await withOutDir(async (outDir) => {
       const storage = createGameStorage(outDir, {});
@@ -366,6 +398,78 @@ describe('game storage', () => {
         .toMatchObject({ written: false, error: expect.stringContaining('inside') });
       expect(await storage.read('protected.html')).toEqual(before);
       expect(saved).toHaveLength(1);
+    });
+  });
+
+  test('bounds edit_game patches before storage and accepts the maximum', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const oldText = 'o'.repeat(MAX_EDIT_CHARS);
+      const newText = 'n'.repeat(MAX_EDIT_CHARS);
+      await storage.save('bounded-edit.html', playableHtml.replace('</body>', `${oldText}</body>`), savePost());
+      const read = storage.read.bind(storage);
+      const save = storage.save.bind(storage);
+      let reads = 0;
+      let writes = 0;
+      storage.read = async (filename, versionId) => {
+        reads++;
+        return read(filename, versionId);
+      };
+      storage.save = async (filename, content, metadata, overwrite) => {
+        writes++;
+        return save(filename, content, metadata, overwrite);
+      };
+      const [, , , , edit] = makeTools(config, new Budget(8, 10_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'bounded edit', model: 'tool-model', ts: 2 }),
+      });
+      const path = join(outDir, 'bounded-edit.html');
+      const oversizedOldText = `${oldText}x`;
+      const oversizedNewText = `${newText}x`;
+
+      expect(edit.function.inputSchema.safeParse({ path, old_text: oldText, new_text: newText }).success).toBe(true);
+      const rejectedOldText = edit.function.inputSchema.safeParse({ path, old_text: oversizedOldText, new_text: newText });
+      const rejectedNewText = edit.function.inputSchema.safeParse({ path, old_text: newText, new_text: oversizedNewText });
+      expect(rejectedOldText.success).toBe(false);
+      expect(rejectedNewText.success).toBe(false);
+      if (rejectedOldText.success || rejectedNewText.success) throw new Error('Expected oversized edit text to fail validation.');
+      expect(rejectedOldText.error.issues[0]?.message).toContain('no changes written');
+      expect(rejectedNewText.error.issues[0]?.message).toContain('no changes written');
+      expect(await edit.function.execute({ path, old_text: oldText, new_text: newText })).toMatchObject({ written: true, valid: true });
+      const afterExactEdit = await read('bounded-edit.html');
+      const readsBeforeRejection = reads;
+      const writesBeforeRejection = writes;
+
+      expect(await edit.function.execute({ path, old_text: oversizedOldText, new_text: 'x' }))
+        .toMatchObject({ written: false, valid: false, error: expect.stringContaining('smaller exact edit_game calls') });
+      expect(await edit.function.execute({ path, old_text: newText, new_text: oversizedNewText }))
+        .toMatchObject({ written: false, valid: false, error: expect.stringContaining('no changes written') });
+      expect(reads).toBe(readsBeforeRejection);
+      expect(writes).toBe(writesBeforeRejection);
+      expect(await read('bounded-edit.html')).toEqual(afterExactEdit);
+    });
+  });
+
+  test('edit_game keeps large saved files editable through bounded patches', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      const config = loadConfig({ outDir }, { skipApiKey: true });
+      const content = `${playableHtml.replace('Play', 'First')}\n<!-- ${'x'.repeat(MAX_SAVE_CHARS)} -->`;
+      await storage.save('large-edit.html', content, { ...savePost(), instructions: 'Keep these controls.' });
+      const [, , , , edit] = makeTools(config, new Budget(4, 20_000, 0), {
+        storage,
+        saveMetadata: () => ({ prompt: 'large edit', model: 'tool-model', ts: 2 }),
+      });
+      const path = join(outDir, 'large-edit.html');
+
+      expect(content.length).toBeGreaterThan(MAX_SAVE_CHARS);
+      expect(await edit.function.execute({ path, old_text: 'First', new_text: 'Second' })).toMatchObject({ written: true, valid: true });
+      expect(await edit.function.execute({ path, old_text: 'Second', new_text: 'Third' })).toMatchObject({ written: true, valid: true });
+      const restored = await storage.read('large-edit.html');
+      expect(restored.content).toContain('Third');
+      expect(restored.content.length).toBeGreaterThan(MAX_SAVE_CHARS);
+      expect(restored.post.instructions).toBe('Keep these controls.');
     });
   });
 
