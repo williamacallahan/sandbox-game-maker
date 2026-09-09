@@ -84,6 +84,14 @@ const server = Bun.serve({
         return json({ error: errorMessage(error) }, 502);
       }
     }
+    // Delete one version (?versionId=) or the whole game; `remaining: 0` means the game is gone.
+    if (version && req.method === 'DELETE') {
+      try {
+        return json({ remaining: await storage.remove(version[1], url.searchParams.get('versionId') ?? undefined) });
+      } catch (error) {
+        return json({ error: errorMessage(error) }, 502);
+      }
+    }
 
     // Metadata (prompt, instructions, settings, stats) for one stored version of a game.
     const postMatch = POST_URL.exec(url.pathname);

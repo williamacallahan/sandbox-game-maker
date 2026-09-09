@@ -63,7 +63,7 @@ Open <http://localhost:3000>.
    - **Max Tool Calls**, **Context Tokens**, **Output Tokens**, **Max Cost**
 3. Click **Make Game**.
 
-The agent streams the generation, calls `save_game` and `validate_game`, and saves a self-contained `.html` file with its prompt, settings, and player instructions. Without object storage, files stay in `games/`; configure durable storage below before running in a disposable container. Open the saved game in the feed to play it.
+The agent streams the generation, calls `save_game` and `validate_game`, and saves a self-contained `.html` file with its prompt, settings, and player instructions. Each card's **Delete** removes the version shown in its history select, or the whole creation when that is the only version, after a confirmation dialog. Without object storage, files stay in `games/`; configure durable storage below before running in a disposable container. Open the saved game in the feed to play it.
 
 ### 5. What gets generated
 

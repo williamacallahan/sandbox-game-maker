@@ -1,5 +1,5 @@
 import { S3Client } from 'bun';
-import { S3Client as AwsS3Client, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
+import { S3Client as AwsS3Client, DeleteObjectCommand, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AgentConfig } from './config.js';
@@ -249,6 +249,26 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       }
     },
     versions: listVersions,
+    /**
+     * Permanently delete one stored version, or every version when none is named.
+     * Returns how many versions remain; 0 means the game is gone. Local storage keeps one version per game.
+     */
+    async remove(filename: string, versionId?: string): Promise<number> {
+      if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
+      let remaining = 0;
+      if (awsClient) {
+        const key = `games/${filename}.json`;
+        const targets = versionId ? [versionId] : (await listVersions(filename)).map((v) => v.versionId);
+        for (const VersionId of targets) {
+          await awsClient.send(new DeleteObjectCommand({ Bucket: env.GAME_STORAGE_BUCKET!, Key: key, VersionId }));
+        }
+        remaining = (await listVersions(filename)).length;
+      } else {
+        await rm(join(recordsDir, `${filename}.json`), { force: true });
+      }
+      if (remaining === 0) await rm(join(outDir, filename), { force: true });
+      return remaining;
+    },
   };
 }
 export type GameStorage = ReturnType<typeof createGameStorage>;

@@ -106,6 +106,16 @@
   .actions svg { width: 24px; height: 24px; }
   .actions .liked svg { fill: #ed4956; stroke: #ed4956; }
   .actions .improve { font: inherit; font-weight: 600; font-size: 13px; color: var(--text); display: flex; align-items: center; }
+  .actions .delete { font: inherit; font-size: 12px; color: var(--muted); display: flex; align-items: center; }
+  .actions .delete:hover { color: #c62828; }
+
+  /* native confirmation dialog */
+  dialog { border: 0; border-radius: 12px; padding: 20px; width: min(360px, calc(100% - 32px)); color: var(--text); font: inherit; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  dialog menu { display: flex; justify-content: flex-end; gap: 8px; margin: 0; padding: 0; }
+  dialog button { border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; background: #fff; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+  dialog button.danger { border-color: transparent; background: #c62828; color: #fff; font-weight: 600; }
   /* Shares the row when its full label fits; on a phone it wraps to its own full-width line. */
   .versions { margin-left: auto; flex: 1 1 240px; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--text); text-overflow: ellipsis; }
   .versions:disabled { opacity: .5; }
@@ -162,6 +172,8 @@
   <div id="pending"></div>
   <div id="feed"><p class="empty">loading…</p></div>
 </main>
+
+<dialog id="confirm"><form method="dialog"><p id="confirm-text"></p><menu><button value="cancel" type="submit">Cancel</button><button value="ok" type="submit" class="danger">Delete</button></menu></form></dialog>
 
 <div id="improve-overlay" hidden>
   <div class="improve-modal">
@@ -249,6 +261,15 @@ async function loadVersions(file, select) {
   }
 }
 
+// Native <dialog> confirmation; resolves true only when the Delete button submitted the form.
+function confirmDialog(text) {
+  const dialog = $('#confirm');
+  $('#confirm-text', dialog).textContent = text;
+  dialog.returnValue = '';
+  dialog.showModal();
+  return new Promise((resolve) => dialog.addEventListener('close', () => resolve(dialog.returnValue === 'ok'), { once: true }));
+}
+
 function openImprove(file, p) {
   improveFile = file;
   improveTitle.textContent = 'Improve ' + file;
@@ -316,6 +337,7 @@ function postCard(p) {
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
     '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a>' +
     '<button class="improve" type="button" title="improve this game">Improve</button>' +
+    '<button class="delete" type="button" title="delete this version">Delete</button>' +
     '<select class="versions" title="version history" hidden><option>Versions</option></select></div>' +
     '<div class="caption"></div>';
   // The version shown right now; the select swaps both the file and this metadata.
@@ -328,6 +350,26 @@ function postCard(p) {
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   $('.improve', card).addEventListener('click', () => openImprove(p.file, current));
   const versionsSelect = $('.versions', card);
+  $('.delete', card).addEventListener('click', async () => {
+    const versionId = versionsSelect.hidden ? '' : versionsSelect.value;
+    const onlyVersion = versionsSelect.hidden || versionsSelect.options.length <= 1;
+    const what = onlyVersion
+      ? 'Delete ' + p.file + '? It has no other versions, so the whole card goes away.'
+      : 'Delete the version "' + versionsSelect.options[versionsSelect.selectedIndex].textContent + '" of ' + p.file + '?';
+    if (!await confirmDialog(what)) return;
+    try {
+      const res = await fetch('/api/versions/' + encodeURIComponent(p.file) + (onlyVersion || !versionId ? '' : '?versionId=' + encodeURIComponent(versionId)), { method: 'DELETE' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? res.statusText);
+      if (body.remaining === 0) { card.remove(); if (!$('#feed article')) $('#feed').innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
+      // The remaining newest version is now current: reload the list and show it.
+      await loadVersions(p.file, versionsSelect);
+      versionsSelect.value = '';
+      versionsSelect.dispatchEvent(new Event('change'));
+    } catch (err) {
+      alert('Could not delete: ' + err.message);
+    }
+  });
   versionsSelect.addEventListener('change', async () => {
     const versionId = versionsSelect.value;
     const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';

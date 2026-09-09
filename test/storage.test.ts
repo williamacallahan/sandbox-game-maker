@@ -157,6 +157,20 @@ describe('game storage', () => {
     });
   });
 
+  test('removes a local game together with its exported file', async () => {
+    await withOutDir(async (outDir) => {
+      const storage = createGameStorage(outDir, {});
+      await storage.save('gone-game.html', '<main>gone</main>', savePost(5));
+      await storage.save('kept-game.html', '<main>kept</main>', savePost(6));
+
+      expect(await storage.remove('gone-game.html')).toBe(0);
+      expect(await storage.exists('gone-game.html')).toBe(false);
+      await expect(storage.read('gone-game.html')).rejects.toThrow();
+      expect((await storage.list()).map((post) => post.file)).toEqual(['kept-game.html']);
+      await expect(storage.remove('../escape.html')).rejects.toThrow('Invalid game filename');
+    });
+  });
+
   test('rejects saving a game that already exists', async () => {
     await withOutDir(async (outDir) => {
       const filename = 'already-exists.html';
