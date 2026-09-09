@@ -76,6 +76,16 @@ describe('POST /api/generate (Improve)', () => {
     expect(sent.input).toContain('do not call read_file');
   });
 
+  test('POST /api/versions/<file>?versionId= makes that version current', async () => {
+    const missing = await fetch(`${base}/api/versions/poster.html`, { method: 'POST' });
+    expect(missing.status).toBe(400);
+    expect(await missing.text()).toContain('versionId is required');
+    // Local storage keeps one version per game, so the storage layer refuses; S3 behavior is proved live.
+    const local = await fetch(`${base}/api/versions/poster.html?versionId=v-older`, { method: 'POST' });
+    expect(local.status).toBe(502);
+    expect(await local.text()).toContain('Versioned writes require S3 storage');
+  });
+
   test('reads the requested version, not the latest', async () => {
     const { status, text } = await improve({ existingVersionId: 'v-older' });
     expect(status).toBe(502);

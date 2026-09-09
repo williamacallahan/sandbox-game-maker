@@ -1,5 +1,5 @@
 import { S3Client } from 'bun';
-import { S3Client as AwsS3Client, DeleteObjectCommand, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
+import { S3Client as AwsS3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AgentConfig } from './config.js';
@@ -249,6 +249,21 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       }
     },
     versions: listVersions,
+    /**
+     * Make one stored version the current one: it is copied over the key as the newest version, which is what the
+     * feed, the player, and Improve read. History keeps every version, so the previous current one stays selectable.
+     */
+    async promote(filename: string, versionId: string): Promise<void> {
+      if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
+      if (!awsClient) throw new Error('Versioned writes require S3 storage.');
+      const key = `games/${filename}.json`;
+      await awsClient.send(new CopyObjectCommand({
+        Bucket: env.GAME_STORAGE_BUCKET!,
+        Key: key,
+        CopySource: `${env.GAME_STORAGE_BUCKET}/${key}?versionId=${encodeURIComponent(versionId)}`,
+        MetadataDirective: 'COPY',
+      }));
+    },
     /**
      * Permanently delete one stored version, or every version when none is named.
      * Returns how many versions remain; 0 means the game is gone. Local storage keeps one version per game.

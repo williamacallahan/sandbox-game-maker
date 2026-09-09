@@ -84,6 +84,17 @@ const server = Bun.serve({
         return json({ error: errorMessage(error) }, 502);
       }
     }
+    // Make one version (?versionId=) current: it becomes the newest version, the one the feed and player serve.
+    if (version && req.method === 'POST') {
+      const versionId = url.searchParams.get('versionId');
+      if (!versionId) return json({ error: 'versionId is required' }, 400);
+      try {
+        await storage.promote(version[1], versionId);
+        return json({ ok: true });
+      } catch (error) {
+        return json({ error: errorMessage(error) }, 502);
+      }
+    }
     // Delete one version (?versionId=) or the whole game; `remaining: 0` means the game is gone.
     if (version && req.method === 'DELETE') {
       try {

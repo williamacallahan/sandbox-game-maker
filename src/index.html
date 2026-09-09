@@ -108,6 +108,8 @@
   .actions .improve { font: inherit; font-weight: 600; font-size: 13px; color: var(--text); display: flex; align-items: center; }
   .actions .delete { font: inherit; font-size: 12px; color: var(--muted); display: flex; align-items: center; }
   .actions .delete:hover { color: #c62828; }
+  .actions .set-current { font: inherit; font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; }
+  .actions .set-current:disabled { opacity: .5; }
 
   /* native confirmation dialog */
   dialog { border: 0; border-radius: 12px; padding: 20px; width: min(360px, calc(100% - 32px)); color: var(--text); font: inherit; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
@@ -339,6 +341,7 @@ function postCard(p) {
     '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a>' +
     '<button class="improve" type="button" title="improve this game">Improve</button>' +
     '<button class="delete" type="button" title="delete this version">Delete</button>' +
+    '<button class="set-current" type="button" title="make this version the one the feed shows" hidden>Set as current</button>' +
     '<select class="versions" title="version history" hidden><option>Versions</option></select></div>' +
     '<div class="caption"></div>';
   // The version shown right now; the select swaps both the file and this metadata.
@@ -351,6 +354,12 @@ function postCard(p) {
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   const versionsSelect = $('.versions', card);
   const selectedVersion = () => (versionsSelect.hidden ? '' : versionsSelect.value);
+  // After a delete or a promotion the newest version is current: reload the list and show it as Latest.
+  const showLatest = async () => {
+    await loadVersions(p.file, versionsSelect);
+    versionsSelect.value = '';
+    versionsSelect.dispatchEvent(new Event('change'));
+  };
   // Improve the version on screen, not silently the latest one.
   $('.improve', card).addEventListener('click', () => openImprove(p.file, current, selectedVersion()));
   $('.delete', card).addEventListener('click', async () => {
@@ -365,16 +374,30 @@ function postCard(p) {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? res.statusText);
       if (body.remaining === 0) { card.remove(); if (!$('#feed article')) $('#feed').innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
-      // The remaining newest version is now current: reload the list and show it.
-      await loadVersions(p.file, versionsSelect);
-      versionsSelect.value = '';
-      versionsSelect.dispatchEvent(new Event('change'));
+      await showLatest();
     } catch (err) {
       alert('Could not delete: ' + err.message);
     }
   });
+  const setCurrent = $('.set-current', card);
+  setCurrent.addEventListener('click', async () => {
+    const versionId = selectedVersion();
+    if (!versionId) return;
+    setCurrent.disabled = true;
+    try {
+      const res = await fetch('/api/versions/' + encodeURIComponent(p.file) + '?versionId=' + encodeURIComponent(versionId), { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? res.statusText);
+      await showLatest();
+    } catch (err) {
+      alert('Could not set current version: ' + err.message);
+    } finally {
+      setCurrent.disabled = false;
+    }
+  });
   versionsSelect.addEventListener('change', async () => {
     const versionId = versionsSelect.value;
+    setCurrent.hidden = !versionId;
     const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';
     iframe.src = '/games/' + p.file + (isJs ? '?play=1' + (query && '&' + query) : (query && '?' + query));
     try {
