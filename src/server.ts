@@ -15,7 +15,7 @@ const POST_URL = /^\/api\/post\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
 let modelsCache: string | null = null;
 
 const playerHtml = readFileSync(new URL('./player.html', import.meta.url), 'utf-8');
-const ROOT_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'none'; child-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+const ROOT_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'self'; child-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 const GAME_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 const PLAYER_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js; style-src 'unsafe-inline' https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css; connect-src 'none'; img-src 'none'; font-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 

@@ -92,6 +92,16 @@ describe('POST /api/generate (Improve)', () => {
     expect(text).toContain('Versioned reads require S3 storage');
   });
 
+  test('gallery permits same-host game frames while game responses retain opaque sandbox isolation', async () => {
+    const root = await fetch(base);
+    expect(root.headers.get('content-security-policy')).toContain("frame-src 'self'");
+    const game = await fetch(`${base}/games/poster.html`);
+    const policy = game.headers.get('content-security-policy');
+    expect(policy).toContain('sandbox allow-scripts;');
+    expect(policy).toContain("connect-src 'none'");
+    expect(policy).not.toContain('allow-same-origin');
+  });
+
   test('canonical mode remaps stale Improve settings before the model call', async () => {
     const before = upstreamBodies.length;
     const { status } = await improve({ mode: 'game', model: 'oui-1', systemPrompt: UI_SYSTEM_PROMPT });

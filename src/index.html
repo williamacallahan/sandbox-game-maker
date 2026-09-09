@@ -102,7 +102,7 @@
 
   /* Keep only visible creations alive; each game runs in its own sandboxed iframe. */
   .feed-card { contain-intrinsic-size: auto 520px; }
-  .media { aspect-ratio: 1 / .68; display: grid; place-items: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: linear-gradient(145deg, #fcf6ff 0%, #f5f8ff 48%, #fff9f1 100%); }
+  .media { aspect-ratio: 1 / 1; display: grid; place-items: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: linear-gradient(145deg, #fcf6ff 0%, #f5f8ff 48%, #fff9f1 100%); }
   .game-frame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
   .placeholder { display: grid; place-items: center; gap: 10px; color: #4d4b63; text-align: center; }
   .placeholder-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #fff; box-shadow: 0 8px 24px rgba(66, 58, 105, .12); font-size: 30px; }
@@ -383,7 +383,7 @@ function postCard(p) {
   const unavailable = p.unavailable === true;
   // .js terminal games play in the page via the server's ?play xterm runner.
   const src = '/games/' + p.file + (isJs ? '?play=1' : '');
-  const media = '<div class="media" data-game-media>' + (unavailable ? '<div class="placeholder"><div class="placeholder-icon">⚠️</div><b>Creation unavailable</b><small>Use Details or Improve to retry metadata.</small></div>' : '<iframe class="game-frame" loading="lazy" sandbox="allow-scripts allow-same-origin" title="' + esc(name) + '" data-src="' + esc(src) + '"></iframe>') + '</div>';
+  const media = '<div class="media" data-game-media>' + (unavailable ? '<div class="placeholder"><div class="placeholder-icon">⚠️</div><b>Creation unavailable</b><small>Use Details or Improve to retry metadata.</small></div>' : '<iframe class="game-frame" loading="lazy" sandbox="allow-scripts" title="' + esc(name) + '" data-src="' + esc(src) + '"></iframe>') + '</div>';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
     '<div class="who"><b>' + esc(name) + '</b><small></small></div>' +
@@ -405,23 +405,29 @@ function postCard(p) {
   fillMeta(card, current);
 
   const frame = $('.game-frame', card);
+  let inViewport = false;
+  const wake = () => {
+    if (frame && inViewport && !document.hidden && frame.getAttribute('src') !== frame.dataset.src) frame.src = frame.dataset.src;
+  };
+  const sleep = () => frame?.removeAttribute('src');
+  const onVisibility = () => document.hidden ? sleep() : wake();
+  const visibility = new IntersectionObserver(([entry]) => {
+    inViewport = entry.isIntersecting;
+    if (inViewport) wake(); else sleep();
+  });
   if (frame) {
-    const wake = async () => {
-      if (frame.srcdoc || frame.dataset.loading) return;
-      frame.dataset.loading = '1';
-      try {
-        const response = await fetch(frame.dataset.src);
-        if (!response.ok) throw new Error('game load failed');
-        frame.srcdoc = await response.text();
-      } catch {
-        frame.srcdoc = '<body style="margin:0;display:grid;place-items:center;font:14px system-ui;color:#666">Game unavailable</body>';
-      } finally { delete frame.dataset.loading; }
-    };
-    const sleep = () => { if (frame.srcdoc) frame.srcdoc = ''; };
-    const visibility = new IntersectionObserver(([entry]) => entry.isIntersecting ? wake() : sleep(), { rootMargin: '220px 0px' });
-    visibility.observe(card);
-    $('.play-link', card).addEventListener('click', () => { wake(); card.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+    visibility.observe(frame);
+    document.addEventListener('visibilitychange', onVisibility);
+    $('.play-link', card).addEventListener('click', () => {
+      frame.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      frame.focus();
+    });
   }
+  card._dispose = () => {
+    visibility.disconnect();
+    document.removeEventListener('visibilitychange', onVisibility);
+    sleep();
+  };
 
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   const versionsSelect = $('.versions', card);
@@ -445,7 +451,7 @@ function postCard(p) {
       const res = await fetch('/api/versions/' + encodeURIComponent(p.file) + (onlyVersion || !versionId ? '' : '?versionId=' + encodeURIComponent(versionId)), { method: 'DELETE' });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? res.statusText);
-      if (body.remaining === 0) { card.remove(); if (!$('#feed article')) $('#feed').innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
+      if (body.remaining === 0) { card._dispose(); card.remove(); if (!$('#feed article')) $('#feed').innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
       await showLatest();
     } catch (err) {
       alert('Could not delete: ' + err.message);
@@ -471,8 +477,9 @@ function postCard(p) {
     const versionId = versionsSelect.value;
     setCurrent.hidden = !versionId;
     const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';
-    const playLink = $('.play-link', card);
-    playLink.href = '/games/' + p.file + (isJs ? '?play=1' + (query && '&' + query) : (query && '?' + query));
+    if (frame) frame.dataset.src = '/games/' + p.file + (isJs ? '?play=1' + (query && '&' + query) : (query && '?' + query));
+    sleep();
+    wake();
     try {
       const res = await fetch('/api/post/' + encodeURIComponent(p.file) + (query && '?' + query));
       if (!res.ok) throw new Error(res.statusText);
@@ -505,7 +512,7 @@ async function loadFeed(reset = false) {
   const page = await response.json();
   if (!response.ok) { feedLoading = false; throw new Error(page.error ?? response.statusText); }
   const feed = $('#feed');
-  if (reset) { feed.innerHTML = ''; feedCursor = null; }
+  if (reset) { feed.querySelectorAll('article').forEach(card => card._dispose?.()); feed.innerHTML = ''; feedCursor = null; }
   if (!page.posts.length && !feed.querySelector('article')) feed.innerHTML = '<p class="empty">no creations yet — post one above</p>';
   for (const p of page.posts) if (!feed.querySelector('article[data-file="' + CSS.escape(p.file) + '"]')) feed.append(postCard(p));
   feedCursor = page.nextCursor;
@@ -576,7 +583,9 @@ async function finishGeneration(pending, finishedPosts) {
     $('#feed .empty')?.remove();
     for (const post of finishedPosts) {
       // Regenerating an existing filename replaces its card instead of duplicating it.
-      $('#feed article[data-file="' + CSS.escape(post.file) + '"]')?.remove();
+      const oldCard = $('#feed article[data-file="' + CSS.escape(post.file) + '"]');
+      oldCard?._dispose?.();
+      oldCard?.remove();
       $('#feed').prepend(postCard(post));
     }
   } else {
