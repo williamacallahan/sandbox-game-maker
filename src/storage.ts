@@ -1,5 +1,6 @@
 import { S3Client } from 'bun';
 import { S3Client as AwsS3Client, CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, ListObjectVersionsCommand } from '@aws-sdk/client-s3';
+import { Buffer } from 'node:buffer';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { AgentConfig } from './config.js';
@@ -19,9 +20,97 @@ export type Post = {
 type Record = { content: string; post: Post; statsRunId?: string };
 export type SavePost = Omit<Post, 'file'> & { runId?: string };
 export type GameVersion = { versionId: string; lastModified: Date; isLatest: boolean; eTag: string };
+export type FeedPost = { file: string; prompt: string; model: string; ts: number; unavailable?: true };
+export type FeedPage = { posts: FeedPost[]; nextCursor: string | null };
+export type FeedPageOptions = { limit?: number; cursor?: string };
+
+export const FEED_PAGE_SIZE = 10;
+const FEED_CURSOR_MAX_LENGTH = 256;
+const FEED_PROMPT_MAX_LENGTH = 500;
+const FEED_MODEL_MAX_LENGTH = 200;
+const FEED_CACHE_TTL_MS = 15_000;
+
+export class FeedRequestError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FeedRequestError';
+  }
+}
+
+export function parseFeedLimit(value: string): number {
+  if (!/^(?:[1-9]|10)$/.test(value)) throw new FeedRequestError('limit must be an integer from 1 to 10.');
+  return Number(value);
+}
+
+export function encodeFeedCursor(post: Pick<FeedPost, 'ts' | 'file'>): string {
+  return Buffer.from(JSON.stringify({ ts: post.ts, file: post.file }), 'utf8').toString('base64url');
+}
+
+export function decodeFeedCursor(value: string | undefined): { ts: number; file: string } | undefined {
+  if (value === undefined) return undefined;
+  if (value.length === 0 || value.length > FEED_CURSOR_MAX_LENGTH || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new FeedRequestError('cursor is invalid.');
+  }
+  try {
+    const decoded = Buffer.from(value, 'base64url');
+    if (decoded.toString('base64url') !== value) throw new Error('non-canonical cursor');
+    const parsed: unknown = JSON.parse(decoded.toString('utf8'));
+    if (typeof parsed !== 'object' || parsed === null) throw new Error('cursor payload is not an object');
+    const candidate = parsed as { ts?: unknown; file?: unknown };
+    if (typeof candidate.ts !== 'number' || !Number.isFinite(candidate.ts) || typeof candidate.file !== 'string' || !GAME_FILENAME.test(candidate.file)) {
+      throw new Error('cursor payload is invalid');
+    }
+    return { ts: candidate.ts, file: candidate.file };
+  } catch {
+    throw new FeedRequestError('cursor is invalid.');
+  }
+}
+
+function compareFeedPosts(a: FeedPost, b: FeedPost): number {
+  return a.ts !== b.ts ? b.ts - a.ts : a.file < b.file ? -1 : a.file > b.file ? 1 : 0;
+}
+
+export function paginateFeed(posts: FeedPost[], options: FeedPageOptions = {}): FeedPage {
+  const limit = options.limit ?? FEED_PAGE_SIZE;
+  if (!Number.isInteger(limit) || limit < 1 || limit > FEED_PAGE_SIZE) {
+    throw new FeedRequestError(`limit must be an integer from 1 to ${FEED_PAGE_SIZE}.`);
+  }
+  const cursor = decodeFeedCursor(options.cursor);
+  const ordered = [...posts].sort(compareFeedPosts);
+  const eligible = cursor
+    ? ordered.filter((post) => post.ts < cursor.ts || (post.ts === cursor.ts && post.file > cursor.file))
+    : ordered;
+  const page = eligible.slice(0, limit);
+  return {
+    posts: page.map((post) => ({ ...post })),
+    nextCursor: eligible.length > limit && page.length ? encodeFeedCursor(page.at(-1)!) : null,
+  };
+}
 
 function missing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'NoSuchKey');
+}
+
+class UnavailableSummaryError extends Error {
+  constructor() {
+    super('Unavailable game summary.');
+    this.name = 'UnavailableSummaryError';
+  }
+}
+
+function isPostForFile(value: unknown, filename: string): value is Post & { file: string } {
+  if (typeof value !== 'object' || value === null) return false;
+  const post = value as { file?: unknown; prompt?: unknown; model?: unknown; ts?: unknown };
+  return post.file === filename && typeof post.prompt === 'string' && typeof post.model === 'string' && typeof post.ts === 'number' && Number.isFinite(post.ts);
+}
+
+function summarizePost(post: Post & { file: string }): FeedPost {
+  return {
+    file: post.file,
+    prompt: post.prompt.slice(0, FEED_PROMPT_MAX_LENGTH),
+    model: post.model.slice(0, FEED_MODEL_MAX_LENGTH),
+    ts: post.ts,
+  };
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -69,6 +158,14 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     },
   }) : null;
   const recordsDir = join(outDir, '.records');
+  let summaryGeneration = 0;
+  let summaryCache: { generation: number; expiresAt: number; posts: FeedPost[] } | null = null;
+  let summaryFlight: { generation: number; promise: Promise<FeedPost[]> } | null = null;
+
+  function invalidateSummaryCache() {
+    summaryGeneration++;
+    summaryCache = null;
+  }
 
   async function readFeed(): Promise<Post[]> {
     let feed: Post[] = [];
@@ -81,6 +178,15 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     const path = join(outDir, filename);
     const [content, info, feed] = await Promise.all([readFile(path, 'utf8'), stat(path), getFeed()]);
     return { content, post: feed.find((post) => post.file === filename) ?? { file: filename, prompt: '', model: '', ts: info.mtimeMs } };
+  }
+
+  async function legacySummary(filename: string, getFeed = readFeed): Promise<FeedPost> {
+    const [info, feed] = await Promise.all([stat(join(outDir, filename)), getFeed()]);
+    if (!Array.isArray(feed)) throw new UnavailableSummaryError();
+    const post = feed.find((candidate) => candidate.file === filename);
+    if (!post) return { file: filename, prompt: '', model: '', ts: info.mtimeMs };
+    if (!isPostForFile(post, filename)) throw new UnavailableSummaryError();
+    return summarizePost(post);
   }
 
   async function readRecord(filename: string, getFeed = readFeed): Promise<Record> {
@@ -98,6 +204,50 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       throw new Error('Invalid stored game record.');
     }
     return record;
+  }
+
+  async function readSummaryRecord(filename: string, getFeed = readFeed): Promise<FeedPost> {
+    if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
+    let raw: unknown;
+    try {
+      raw = remote
+        ? await remote.file(`games/${filename}.json`).json()
+        : JSON.parse(await readFile(join(recordsDir, `${filename}.json`), 'utf8'));
+    } catch (error) {
+      if (missing(error)) return legacySummary(filename, getFeed);
+      if (error instanceof SyntaxError) throw new UnavailableSummaryError();
+      throw error;
+    }
+    if (typeof raw !== 'object' || raw === null) throw new UnavailableSummaryError();
+    const candidate = raw as { content?: unknown; post?: unknown };
+    if (typeof candidate.content !== 'string' || !isPostForFile(candidate.post, filename)) throw new UnavailableSummaryError();
+    return summarizePost(candidate.post);
+  }
+
+  async function unavailableSummary(filename: string): Promise<FeedPost> {
+    let ts = 0;
+    if (!remote) {
+      for (const path of [join(recordsDir, `${filename}.json`), join(outDir, filename)]) {
+        try {
+          ts = (await stat(path)).mtimeMs;
+          break;
+        } catch (error) {
+          if (!missing(error)) throw error;
+        }
+      }
+    }
+    return { file: filename, prompt: 'Unavailable game', model: '', ts, unavailable: true };
+  }
+
+  async function readSummary(filename: string, getFeed: () => Promise<Post[]>): Promise<FeedPost> {
+    try {
+      return await readSummaryRecord(filename, getFeed);
+    } catch (error) {
+      if (error instanceof UnavailableSummaryError || missing(error) || error instanceof SyntaxError) {
+        return unavailableSummary(filename);
+      }
+      throw error;
+    }
   }
 
   async function readVersionRecord(filename: string, versionId: string): Promise<Record> {
@@ -163,6 +313,59 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     return remote ? remote.file(`games/${filename}.json`).exists() : exists(join(recordsDir, `${filename}.json`));
   }
 
+  async function discoverNames(): Promise<Set<string>> {
+    const names = new Set<string>();
+    for (const [directory, suffix] of [[outDir, ''], [recordsDir, '.json']] as const) {
+      try {
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+          const filename = suffix && entry.name.endsWith(suffix) ? entry.name.slice(0, -suffix.length) : entry.name;
+          if (entry.isFile() && GAME_FILENAME.test(filename)) names.add(filename);
+        }
+      } catch (error) { if (!missing(error)) throw error; }
+    }
+    if (remote) {
+      let continuationToken: string | undefined;
+      do {
+        const page = await remote.list({ prefix: 'games/', continuationToken });
+        for (const item of page.contents ?? []) {
+          const filename = item.key.slice('games/'.length, -'.json'.length);
+          if (item.key.endsWith('.json') && GAME_FILENAME.test(filename)) names.add(filename);
+        }
+        continuationToken = page.isTruncated ? page.nextContinuationToken : undefined;
+        if (page.isTruncated && !continuationToken) throw new Error('Storage returned an incomplete listing without a continuation token.');
+      } while (continuationToken);
+    }
+    return names;
+  }
+
+  async function scanSummaries(): Promise<FeedPost[]> {
+    const filenames = [...await discoverNames()];
+    const posts: FeedPost[] = [];
+    let legacyFeed: Promise<Post[]> | undefined;
+    // ponytail: current records keep ts inside each JSON object, so a cold scan is O(records); an index requires a schema migration.
+    for (let offset = 0; offset < filenames.length; offset += 4) {
+      posts.push(...await Promise.all(filenames.slice(offset, offset + 4).map((filename) =>
+        readSummary(filename, () => legacyFeed ??= readFeed()))));
+    }
+    return posts.sort(compareFeedPosts);
+  }
+
+  async function cachedSummaries(): Promise<FeedPost[]> {
+    const now = Date.now();
+    if (summaryCache && summaryCache.expiresAt > now) return summaryCache.posts;
+    const generation = summaryGeneration;
+    if (summaryFlight?.generation === generation) return summaryFlight.promise;
+    let promise: Promise<FeedPost[]>;
+    promise = scanSummaries().then((posts) => {
+      if (summaryGeneration === generation) summaryCache = { generation, expiresAt: Date.now() + FEED_CACHE_TTL_MS, posts };
+      return posts;
+    }).finally(() => {
+      if (summaryFlight?.generation === generation && summaryFlight.promise === promise) summaryFlight = null;
+    });
+    summaryFlight = { generation, promise };
+    return promise;
+  }
+
   return {
     mode: remote ? 's3' as const : 'local' as const,
     exists: gameExists,
@@ -189,6 +392,7 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
         await mkdir(recordsDir, { recursive: true });
         await atomicWrite(recordPath, JSON.stringify(record));
       }
+      invalidateSummaryCache();
       // The record owns reads; this export keeps local CLI output convenient.
       try {
         await mkdir(outDir, { recursive: true });
@@ -202,27 +406,7 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       return { content: record.content, post: record.post };
     },
     async list(): Promise<Post[]> {
-      const names = new Set<string>();
-      for (const [directory, suffix] of [[outDir, ''], [recordsDir, '.json']] as const) {
-        try {
-          for (const entry of await readdir(directory, { withFileTypes: true })) {
-            const filename = suffix && entry.name.endsWith(suffix) ? entry.name.slice(0, -suffix.length) : entry.name;
-            if (entry.isFile() && GAME_FILENAME.test(filename)) names.add(filename);
-          }
-        } catch (error) { if (!missing(error)) throw error; }
-      }
-      if (remote) {
-        let continuationToken: string | undefined;
-        do {
-          const page = await remote.list({ prefix: 'games/', continuationToken });
-          for (const item of page.contents ?? []) {
-            const filename = item.key.slice('games/'.length, -'.json'.length);
-            if (item.key.endsWith('.json') && GAME_FILENAME.test(filename)) names.add(filename);
-          }
-          continuationToken = page.isTruncated ? page.nextContinuationToken : undefined;
-          if (page.isTruncated && !continuationToken) throw new Error('Storage returned an incomplete listing without a continuation token.');
-        } while (continuationToken);
-      }
+      const names = await discoverNames();
       const stats = new Map<string, Promise<RunStats | null>>();
       const posts: Post[] = [];
       const filenames = [...names];
@@ -240,6 +424,12 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
       }
       return posts.sort((a, b) => b.ts - a.ts);
     },
+    async listSummaries(): Promise<FeedPost[]> {
+      return (await cachedSummaries()).map((post) => ({ ...post }));
+    },
+    async listFeed(options: FeedPageOptions = {}): Promise<FeedPage> {
+      return paginateFeed(await cachedSummaries(), options);
+    },
     async saveStats(runId: string, stats: RunStats): Promise<void> {
       if (!/^[a-f0-9-]{36}$/.test(runId)) throw new Error('Invalid run identifier.');
       if (remote) await remote.write(`games/stats/${runId}.json`, JSON.stringify(stats), { type: 'application/json' });
@@ -256,6 +446,7 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
     async promote(filename: string, versionId: string): Promise<void> {
       if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
       if (!awsClient) throw new Error('Versioned writes require S3 storage.');
+      invalidateSummaryCache();
       const key = `games/${filename}.json`;
       await awsClient.send(new CopyObjectCommand({
         Bucket: env.GAME_STORAGE_BUCKET!,
@@ -270,6 +461,7 @@ export function createGameStorage(outDir: string, env: NodeJS.ProcessEnv = proce
      */
     async remove(filename: string, versionId?: string): Promise<number> {
       if (!GAME_FILENAME.test(filename)) throw new Error('Invalid game filename.');
+      invalidateSummaryCache();
       let remaining = 0;
       if (awsClient) {
         const key = `games/${filename}.json`;

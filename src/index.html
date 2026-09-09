@@ -73,9 +73,12 @@
   .chips { display: flex; gap: 6px; padding: 6px 12px 0; }
   .chip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
   .chip.on { border-color: transparent; background: var(--grad); color: #fff; font-weight: 600; }
-  .composer-foot { display: flex; justify-content: flex-end; padding: 12px; }
+  .composer-status { margin: 8px 12px 0; color: var(--muted); font-size: 12px; }
+  .composer-status.error { color: #c62828; }
+  .composer-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px; }
   #post-btn { border: 0; border-radius: 8px; padding: 8px 22px; background: var(--grad); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; }
   #post-btn:disabled { opacity: .4; cursor: default; }
+  .retry-btn { border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; background: #fff; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
 
   /* pending / streaming */
   .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: #d62976; border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
@@ -89,18 +92,21 @@
 
   /* per-post details */
   .detail-panel { border-top: 1px solid var(--border); padding: 10px 12px; background: var(--bg); font-size: 12px; }
-  .how-panel p { margin: 0 0 8px; white-space: pre-wrap; }
-  .dismiss-overlay { border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; background: #fff; color: var(--text); font: inherit; cursor: pointer; }
+  .detail-panel h3 { margin: 0 0 8px; font-size: 12px; }
+  .detail-panel p { margin: 0; white-space: pre-wrap; }
   .detail-rows { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
   .detail-rows span { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .04em; align-self: center; }
   .detail-sys { margin: 8px 0 0; padding: 8px; max-height: 140px; overflow-y: auto; background: #111; color: #e8e8e8; border-radius: 6px; font: 10px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: break-word; }
   .stream .tool { color: #7ab8ff; }
   .stream:empty { display: none; }
 
-  /* posts */
-  .media { position: relative; aspect-ratio: 1 / 1; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: #000; }
-  .media iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
-  .media pre { margin: 0; width: 100%; height: 100%; overflow: auto; padding: 14px; background: #111; color: #e8e8e8; font: 11px/1.5 ui-monospace, Menlo, monospace; }
+  /* posts stay cheap in the root document; creations run only in a new tab. */
+  .feed-card { content-visibility: auto; contain-intrinsic-size: auto 520px; }
+  .media { aspect-ratio: 1 / .68; display: grid; place-items: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: linear-gradient(145deg, #fcf6ff 0%, #f5f8ff 48%, #fff9f1 100%); }
+  .placeholder { display: grid; place-items: center; gap: 10px; color: #4d4b63; text-align: center; }
+  .placeholder-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #fff; box-shadow: 0 8px 24px rgba(66, 58, 105, .12); font-size: 30px; }
+  .placeholder small { color: var(--muted); }
+  .pending-preview { margin: 0 12px 12px; padding: 10px; max-height: 180px; overflow: auto; border-radius: 8px; background: #111; color: #e8e8e8; font: 11px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: break-word; }
   .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 8px 12px 0; }
   .actions button, .actions a { border: 0; background: none; padding: 0; cursor: pointer; color: var(--text); display: flex; }
   .actions svg { width: 24px; height: 24px; }
@@ -110,6 +116,9 @@
   .actions .delete:hover { color: #c62828; }
   .actions .set-current { font: inherit; font-size: 12px; font-weight: 600; color: var(--text); display: flex; align-items: center; }
   .actions .set-current:disabled { opacity: .5; }
+  .actions [hidden] { display: none !important; }
+  .actions .history { font: inherit; font-size: 12px; color: var(--muted); }
+  .play-link { gap: 5px; align-items: center; font: inherit; font-weight: 600; font-size: 13px; text-decoration: none; }
 
   /* native confirmation dialog */
   dialog { border: 0; border-radius: 12px; padding: 20px; width: min(360px, calc(100% - 32px)); color: var(--text); font: inherit; box-shadow: 0 12px 40px rgba(0,0,0,.25); }
@@ -121,11 +130,17 @@
   /* Shares the row when its full label fits; on a phone it wraps to its own full-width line. */
   .versions { margin-left: auto; flex: 1 1 240px; min-width: 0; padding: 4px 8px; border: 1px solid var(--border); border-radius: 8px; background: #fff; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--text); text-overflow: ellipsis; }
   .versions:disabled { opacity: .5; }
-  .caption { padding: 6px 12px 12px; font-size: 13px; }
+  .caption { padding: 6px 12px 12px; font-size: 13px; overflow-wrap: anywhere; }
   .caption b { margin-right: 6px; }
   .caption .model { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
-  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
-  .error { margin: 0 12px 12px; padding: 10px; border-radius: 8px; background: #fdecec; color: #c62828; font-size: 12px; }
+  .card-message { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 12px 12px; padding: 10px; border-radius: 8px; background: #fdecec; color: #c62828; font-size: 12px; }
+  .card-message button { border: 1px solid currentColor; border-radius: 6px; padding: 3px 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .feed-controls { display: grid; justify-items: center; gap: 8px; padding: 0 8px; }
+  .feed-status { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
+  .feed-controls .error { color: #c62828; }
+  #feed-sentinel { height: 1px; }
+  .panel-error { color: #c62828; }
+  .panel-error button { margin-left: 8px; border: 1px solid currentColor; border-radius: 6px; padding: 3px 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
 
   /* improve modal */
   #improve-overlay { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; }
@@ -148,7 +163,7 @@
     </div>
     <label for="prompt">Prompt</label>
     <textarea id="prompt" placeholder="a snake game with wrap-around walls"></textarea>
-    <details>
+    <details id="settings-details">
       <summary>System prompt &amp; settings</summary>
       <div class="chips">
         <button class="chip on" data-mode="game" type="button">Game</button>
@@ -167,12 +182,21 @@
         <div><label for="reasoningEffort">Reasoning</label><select id="reasoningEffort"><option value="">model default</option></select></div>
         <div class="wide"><label for="filename">Filename</label><input id="filename" placeholder="auto — e.g. my-game.html" pattern="[a-z0-9][a-z0-9-]*\.(html|js)" title="lowercase kebab-case, no underscores, ending in .html or .js"></div>
       </div>
+      <p id="model-status" class="composer-status" role="status" hidden></p>
+      <button id="model-retry" class="retry-btn" type="button" hidden>Retry model catalog</button>
     </details>
-    <div class="composer-foot"><button id="post-btn" disabled>Post</button></div>
+    <p id="config-status" class="composer-status" role="status">Loading composer settings…</p>
+    <div class="composer-foot"><button id="config-retry" class="retry-btn" type="button" hidden>Retry configuration</button><button id="post-btn" disabled>Post</button></div>
   </section>
 
   <div id="pending"></div>
-  <div id="feed"><p class="empty">loading…</p></div>
+  <section id="feed" aria-live="polite"></section>
+  <div id="feed-controls" class="feed-controls">
+    <p id="feed-status" class="feed-status" role="status">Loading games…</p>
+    <button id="feed-retry" class="retry-btn" type="button" hidden>Retry</button>
+    <button id="load-more" class="retry-btn" type="button" hidden>Load more</button>
+  </div>
+  <div id="feed-sentinel" aria-hidden="true"></div>
 </main>
 
 <dialog id="confirm"><form method="dialog"><p id="confirm-text"></p><menu><button value="cancel" type="submit">Cancel</button><button value="ok" type="submit" class="danger">Delete</button></menu></form></dialog>
@@ -245,22 +269,42 @@ function detailsPanel(p) {
     '<pre class="detail-sys">' + esc(s.systemPrompt) + '</pre>';
 }
 
-async function loadVersions(file, select) {
-  try {
-    const res = await fetch('/api/versions/' + encodeURIComponent(file));
-    const versions = await res.json();
-    if (!res.ok) throw new Error(versions.error);
-    if (!versions.length) { select.hidden = true; return; }
-    select.hidden = false;
-    select.innerHTML = versions.map((v, i) => {
-      // One short line per version so the select fits a phone-width card; the eTag prefix separates same-minute saves.
+const STREAM_LIMIT = 64 * 1024;
+
+function gameUrl(file, versionId = '') {
+  const params = new URLSearchParams();
+  if (String(file).endsWith('.js')) params.set('play', '1');
+  if (versionId) params.set('versionId', versionId);
+  const query = params.toString();
+  return '/games/' + encodeURIComponent(file) + (query ? '?' + query : '');
+}
+
+function panelError(panel, message, retry) {
+  panel.innerHTML = '<p class="panel-error">' + esc(message) + '</p>';
+  if (!retry) return;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = 'Retry';
+  button.addEventListener('click', retry, { once: true });
+  panel.querySelector('p').append(button);
+}
+
+async function loadVersions(file, select, card) {
+  const res = await fetch('/api/versions/' + encodeURIComponent(file));
+  const body = await res.json().catch(() => []);
+  if (!res.ok) throw new Error(body.error ?? res.statusText);
+  const versions = Array.isArray(body) ? body : body.versions ?? [];
+  card._historyLoaded = true;
+  select.innerHTML = versions.length
+    ? versions.map((v, i) => {
       const when = new Date(v.lastModified).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-      const label = (i === 0 ? 'Latest · ' : '') + when + ' · ' + esc(v.eTag.slice(0, 6));
-      return '<option value="' + (i === 0 ? '' : esc(v.versionId)) + '">' + label + '</option>';
-    }).join('');
-  } catch (error) {
-    select.hidden = true;
-  }
+      const label = (i === 0 ? 'Latest · ' : '') + when + ' · ' + String(v.eTag ?? '').slice(0, 6);
+      return '<option value="' + (i === 0 ? '' : esc(v.versionId)) + '">' + esc(label) + '</option>';
+    }).join('')
+    : '<option value="">Current version</option>';
+  select.hidden = versions.length < 2;
+  select.disabled = false;
+  return versions;
 }
 
 // Native <dialog> confirmation; resolves true only when the Delete button submitted the form.
@@ -282,13 +326,13 @@ function openImprove(file, p, versionId) {
   postBtn.textContent = 'Improve';
   postBtn.disabled = true;
   const s = p.settings ?? {};
-  systemEl.value = s.systemPrompt ?? cfg.systemPrompt;
-  $('#model').value = s.model ?? cfg.model;
-  $('#maxToolCalls').value = s.maxToolCalls ?? cfg.maxToolCalls;
-  $('#maxContextTokens').value = s.maxContextTokens ?? cfg.maxContextTokens;
+  systemEl.value = s.systemPrompt ?? cfg?.systemPrompt ?? '';
+  $('#model').value = s.model ?? cfg?.model ?? '';
+  $('#maxToolCalls').value = s.maxToolCalls ?? cfg?.maxToolCalls ?? '';
+  $('#maxContextTokens').value = s.maxContextTokens ?? cfg?.maxContextTokens ?? '';
   $('#maxOutputTokens').value = s.maxOutputTokens ?? '';
   $('#maxReasoningTokens').value = s.maxReasoningTokens ?? '';
-  $('#maxCost').value = s.maxCost ?? cfg.maxCost;
+  $('#maxCost').value = s.maxCost ?? cfg?.maxCost ?? '';
   $('#reasoningEffort').value = s.reasoningEffort ?? '';
   $('#filename').parentElement.style.display = 'none';
   syncEfforts();
@@ -303,44 +347,53 @@ function closeImprove() {
   main.insertBefore(composer, main.firstChild);
   postBtn.textContent = 'Post';
   promptEl.value = '';
-  for (const key of ['maxToolCalls', 'maxCost']) $('#' + key).value = cfg[key];
+  for (const key of ['maxToolCalls', 'maxCost']) $('#' + key).value = cfg?.[key] ?? '';
   $('#maxReasoningTokens').value = '';
   $('#filename').value = '';
   $('#filename').parentElement.style.display = '';
-  applyMode($('.chip.on').dataset.mode);
-  postBtn.disabled = !promptEl.value.trim();
+  if (cfg) applyMode($('.chip.on').dataset.mode);
+  postBtn.disabled = !cfg || !promptEl.value.trim();
 }
 
 // The parts of a card that belong to one stored version: time, instructions, settings/stats, caption.
 function fillMeta(card, p) {
-  $('.who small', card).textContent = timeAgo(p.ts);
-  $('.how-panel p', card).textContent = p.instructions ?? 'No instructions were recorded for this game.';
-  $('.settings-panel', card).innerHTML = detailsPanel(p);
-  const terminalSuffix = p.file.endsWith('.js') ? ' · terminal game' : '';
-  $('.caption', card).innerHTML = '<b>' + esc(p.file) + '</b>' + esc(p.prompt) +
-    (p.model ? '<span class="model">' + esc(p.model) + terminalSuffix + '</span>' : '');
+  const file = p?.file ?? card.dataset.file;
+  const prompt = String(p?.prompt ?? card._summary?.prompt ?? '').slice(0, 500);
+  $('.who small', card).textContent = p?.ts ? timeAgo(p.ts) : 'metadata on request';
+  $('.how-panel p', card).textContent = p?.instructions ?? 'No instructions were recorded for this game.';
+  $('.settings-panel', card).innerHTML = p?.settings
+    ? detailsPanel(p)
+    : '<div class="detail-rows"><span>metadata</span><b>Load Details to view run settings.</b></div>';
+  const terminalSuffix = String(file).endsWith('.js') ? ' · terminal game' : '';
+  $('.caption', card).innerHTML = '<b>' + esc(file) + '</b>' + esc(prompt) +
+    (p?.model ? '<span class="model">' + esc(p.model) + terminalSuffix + '</span>' : '');
+  card._current = p;
 }
 
 function postCard(p) {
   const card = document.createElement('article');
-  card.className = 'card';
+  card.className = 'card feed-card';
   card.dataset.file = p.file;
-  const name = p.file;
-  const isJs = p.file.endsWith('.js');
+  card._summary = p;
+  card._metaSeq = 0;
+  card._historyLoaded = false;
+  const name = String(p.file ?? 'unavailable creation');
+  const isJs = name.endsWith('.js');
+  const unavailable = p.unavailable === true;
   // .js terminal games play in the page via the server's ?play xterm runner.
   const src = '/games/' + p.file + (isJs ? '?play=1' : '');
-  const media = '<div class="media"><iframe src="' + src + '" sandbox="allow-scripts" loading="lazy" tabindex="0" title="' + esc(name) + '"></iframe></div>';
+  const media = '<div class="media"><div class="placeholder"><div class="placeholder-icon">' + (unavailable ? '⚠️' : (isJs ? '⌨️' : '🕹️')) + '</div><b>' + (unavailable ? 'Creation unavailable' : 'Open to play') + '</b><small>' + (unavailable ? 'Use Details or Improve to retry metadata.' : 'Runs in an isolated tab') + '</small></div></div>';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
     '<div class="who"><b>' + esc(name) + '</b><small></small></div>' +
     '<div class="head-actions"><button class="expand-btn how-btn" type="button" aria-expanded="false">How to play</button>' +
     '<button class="expand-btn details-btn" type="button" aria-expanded="false">Details</button></div></div>' +
-    '<div class="detail-panel how-panel" hidden><p></p>' +
-    '<button class="dismiss-overlay" type="button">Dismiss game overlay</button></div>' +
+    '<div class="detail-panel how-panel" hidden><p>Loading instructions…</p></div>' +
     '<div class="detail-panel settings-panel" hidden></div>' +
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
-    '<a href="' + src + '" target="_blank" title="open full size">' + OPEN + '</a>' +
+    (unavailable ? '' : '<a class="play-link" href="' + src + '" target="_blank" rel="noopener noreferrer" title="open game in isolated tab">' + OPEN + ' Play / Open</a>') +
+    '<button class="history" type="button" title="load version history">History</button>' +
     '<button class="improve" type="button" title="improve this game">Improve</button>' +
     '<button class="delete" type="button" title="delete this version">Delete</button>' +
     '<button class="set-current" type="button" title="make this version the one the feed shows" hidden>Set as current</button>' +
@@ -349,10 +402,7 @@ function postCard(p) {
   // The version shown right now; the select swaps both the file and this metadata.
   let current = p;
   fillMeta(card, current);
-  const iframe = $('iframe', card);
-  for (const ev of ['mouseenter', 'click']) {
-    iframe.addEventListener(ev, () => { try { iframe.contentWindow?.focus(); } catch {} });
-  }
+
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   const versionsSelect = $('.versions', card);
   const selectedVersion = () => (versionsSelect.hidden ? '' : versionsSelect.value);
@@ -401,7 +451,8 @@ function postCard(p) {
     const versionId = versionsSelect.value;
     setCurrent.hidden = !versionId;
     const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';
-    iframe.src = '/games/' + p.file + (isJs ? '?play=1' + (query && '&' + query) : (query && '?' + query));
+    const playLink = $('.play-link', card);
+    playLink.href = '/games/' + p.file + (isJs ? '?play=1' + (query && '&' + query) : (query && '?' + query));
     try {
       const res = await fetch('/api/post/' + encodeURIComponent(p.file) + (query && '?' + query));
       if (!res.ok) throw new Error(res.statusText);
@@ -421,20 +472,26 @@ function postCard(p) {
       button.setAttribute('aria-expanded', String(!panel.hidden));
     });
   }
-  $('.dismiss-overlay', card).addEventListener('click', () => {
-    $('iframe', card).contentWindow?.postMessage({ type: 'game-maker:dismiss-overlay' }, '*');
-  });
+
   return card;
 }
 
-async function loadFeed() {
-  const response = await fetch('/api/feed');
-  const posts = await response.json();
-  if (!response.ok) throw new Error(posts.error ?? response.statusText);
+let feedCursor = null;
+let feedLoading = false;
+async function loadFeed(reset = false) {
+  if (feedLoading || (!reset && feedCursor === null && $('#feed article'))) return;
+  feedLoading = true;
+  const response = await fetch('/api/feed?limit=10' + (reset ? '' : feedCursor ? '&cursor=' + encodeURIComponent(feedCursor) : ''));
+  const page = await response.json();
+  if (!response.ok) throw new Error(page.error ?? response.statusText);
   const feed = $('#feed');
-  feed.innerHTML = '';
-  if (!posts.length) { feed.innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
-  for (const p of posts) feed.append(postCard(p));
+  if (reset) { feed.innerHTML = ''; feedCursor = null; }
+  if (!page.posts.length && !feed.querySelector('article')) feed.innerHTML = '<p class="empty">no creations yet — post one above</p>';
+  for (const p of page.posts) if (!feed.querySelector('article[data-file="' + CSS.escape(p.file) + '"]')) feed.append(postCard(p));
+  feedCursor = page.nextCursor;
+  $('#load-more').hidden = !feedCursor;
+  $('#feed-status').textContent = feedCursor ? 'Scroll for more' : (page.posts.length ? 'All creations loaded' : '');
+  feedLoading = false;
 }
 
 // Live-render a just-written file inside the pending card, straight from the
@@ -450,10 +507,7 @@ function showPreview(args) {
     media.innerHTML = '<pre></pre>';
     $('pre', media).textContent = args.content;
   } else {
-    media.innerHTML = '<iframe sandbox="allow-scripts" tabindex="0" title="preview"></iframe>';
-    const iframe = $('iframe', media);
-    iframe.srcdoc = args.content;
-    iframe.addEventListener('load', () => { try { iframe.contentWindow?.focus(); } catch {} });
+    media.innerHTML = '<div class="placeholder"><div class="placeholder-icon">🕹️</div><b>Preview ready</b><small>Open the saved game to play</small></div>';
   }
   $('#pending .who b').textContent = args.filename ?? 'preview';
 }
@@ -622,7 +676,7 @@ function syncEfforts() {
 $('#model').addEventListener('input', () => { if (cfg) syncEfforts(); });
 
 // The field works as free text when the optional model list is unavailable.
-try {
+void (async () => { try {
   const models = await fetch('/api/models');
   const m = await models.json();
   $('#model-list').innerHTML = m.data
@@ -634,10 +688,17 @@ try {
     if (r) modelReasoning.set(x.id, r);
   }
   if (cfg) syncEfforts();
-} catch {}
+} catch {} })();
 
-const feedPromise = loadFeed().catch((error) => {
-  $('#feed').innerHTML = '<p class="error">Could not load games: ' + esc(error.message) + '</p>';
+$('#load-more').addEventListener('click', () => loadFeed().catch(showFeedError));
+let feedHasScrolled = false;
+addEventListener('scroll', () => { feedHasScrolled = true; }, { once: true, passive: true });
+const feedObserver = new IntersectionObserver(() => { if (feedHasScrolled) loadFeed().catch(showFeedError); });
+feedObserver.observe($('#feed-sentinel'));
+function showFeedError(error) { $('#feed-status').textContent = error.message; $('#feed-retry').hidden = false; }
+$('#feed-retry').addEventListener('click', () => { $('#feed-retry').hidden = true; loadFeed(true).catch(showFeedError); });
+const feedPromise = loadFeed(true).catch((error) => {
+  showFeedError(error);
 });
 cfg = await fetch('/api/config').then((r) => r.json());
 for (const key of ['maxToolCalls', 'maxCost']) $('#' + key).value = cfg[key];

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { CREATE_SYSTEM_PROMPT, UI_DEFAULTS, UI_SYSTEM_PROMPT, loadConfig, positiveNumber, reasoningEffort, REASONING_EFFORTS, type AgentConfig } from './config.js';
 import { runAgent } from './agent.js';
 import { CHARS_PER_TOKEN } from './tools.js';
-import { createGameStorage, GAME_FILENAME } from './storage.js';
+import { createGameStorage, GAME_FILENAME, paginateFeed, parseFeedLimit } from './storage.js';
 
 const defaults = loadConfig({}, { skipApiKey: true });
 const storage = createGameStorage(defaults.outDir);
@@ -15,7 +15,9 @@ const POST_URL = /^\/api\/post\/([a-z0-9][a-z0-9-]*\.(html|js))$/;
 let modelsCache: string | null = null;
 
 const playerHtml = readFileSync(new URL('./player.html', import.meta.url), 'utf-8');
-const PLAYER_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'unsafe-inline' https://cdn.jsdelivr.net; connect-src 'none'; img-src 'none'; font-src 'none'; base-uri 'none'; form-action 'none'";
+const ROOT_CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-src 'none'; child-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+const GAME_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
+const PLAYER_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js; style-src 'unsafe-inline' https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css; connect-src 'none'; img-src 'none'; font-src 'none'; worker-src 'none'; child-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -41,7 +43,9 @@ const server = Bun.serve({
     const url = new URL(req.url);
 
     if (url.pathname === '/') {
-      return new Response(Bun.file(new URL('./index.html', import.meta.url).pathname));
+      return new Response(Bun.file(new URL('./index.html', import.meta.url).pathname), {
+        headers: { 'content-security-policy': ROOT_CSP, 'cross-origin-opener-policy': 'same-origin' },
+      });
     }
 
     if (url.pathname === '/api/config') {
@@ -74,7 +78,8 @@ const server = Bun.serve({
 
     if (url.pathname === '/api/feed') {
       try {
-        return json(await storage.list());
+        const limit = url.searchParams.get('limit') ? parseFeedLimit(url.searchParams.get('limit')!) : 10;
+        return json(paginateFeed((await storage.list()).filter((post): post is typeof post & { file: string } => Boolean(post.file)).map(({ file, prompt, model, ts }) => ({ file, prompt, model, ts })), { limit, cursor: url.searchParams.get('cursor') ?? undefined }));
       } catch (error) {
         return json({ error: errorMessage(error) }, 502);
       }
@@ -139,6 +144,7 @@ const server = Bun.serve({
           headers: {
             'content-type': 'text/html',
             'content-security-policy': PLAYER_CSP,
+            'cross-origin-opener-policy': 'noopener-allow-popups',
           },
         });
       }
@@ -148,7 +154,10 @@ const server = Bun.serve({
       return new Response(content, {
         headers: {
           'content-type': game[2] === 'html' ? 'text/html' : 'text/javascript',
-          ...(game[2] === 'js' && { 'access-control-allow-origin': '*' }),
+          ...(game[2] === 'js' ? { 'access-control-allow-origin': '*' } : {
+            'content-security-policy': GAME_CSP,
+            'cross-origin-opener-policy': 'noopener-allow-popups',
+          }),
         },
       });
     }

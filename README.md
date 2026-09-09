@@ -63,7 +63,17 @@ Open <http://localhost:3000>.
    - **Max Tool Calls**, **Context Tokens**, **Output Tokens**, **Max Cost**
 3. Click **Make Game**.
 
-The agent streams the generation, calls `save_game` and `validate_game`, and saves a self-contained `.html` file with its prompt, settings, and player instructions. Each card's **Delete** removes the version shown in its history select, or the whole creation when that is the only version, after a confirmation dialog. Selecting an older version reveals **Set as current**, which copies that version to the top of the history so the feed, the player, and Improve use it; nothing is discarded. Without object storage, files stay in `games/`; configure durable storage below before running in a disposable container. Open the saved game in the feed to play it.
+The agent streams the generation, calls `save_game` and `validate_game`, and saves a self-contained `.html` file with its prompt, settings, and player instructions. Each card's **Delete** removes the version shown in its history select, or the whole creation when that is the only version, after a confirmation dialog. Selecting an older version reveals **Set as current**, which copies that version to the top of the history so the feed, the player, and Improve use it; nothing is discarded. Without object storage, files stay in `games/`; configure durable storage below before running in a disposable container. Open the saved game from its feed card to play it in a separate tab.
+
+### Gallery performance and game isolation
+
+The gallery loads up to ten creations at a time and loads the next page as you scroll. Game code does not run in the gallery, including while a new creation is being generated. Open a game explicitly to play it in a separate tab; close that tab to stop it. Details and version history load when requested.
+
+Game documents run with a server-enforced sandbox and cannot access the gallery, fetch network resources, create workers, or embed other pages. The terminal player allows only its pinned terminal library. A failed game can be closed without navigating away from the gallery. Browser sandboxing does not provide a hard CPU or memory quota; the browser and operating system control those limits.
+
+`GET /api/feed` returns `{ posts, nextCursor }`, with up to ten summaries containing `file`, `prompt`, `model`, and `ts`. Pass the opaque `nextCursor` as `?cursor=...` to continue; `null` marks the end. `limit` accepts integers from 1 to 10. Full metadata remains available from `/api/post/<filename>`.
+
+The server still scans stored records on a cold summary-cache load because creation timestamps live inside those records. Pagination bounds browser downloads and rendering; a lightweight storage index would be needed to make cold discovery independent of total gallery size.
 
 ### 5. What gets generated
 
