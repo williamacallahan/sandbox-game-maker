@@ -113,6 +113,17 @@ describe('validateGameFile', () => {
     expect(colored.issues.some((issue) => issue.includes('global event target'))).toBe(false);
   });
 
+  test('rejects malformed grid tracks and mismatched table wrapper selectors', () => {
+    const badLayout = '<body style="margin:0;width:100vw;height:100vh;overflow:hidden"><div class="table-wrapper"><table><tr><th>Company</th></tr></table></div><style> .grid { grid-template-columns: fr 1fr; } table-wrapper { overflow:auto; } </style><button onclick="void 0">Go</button></body>';
+    const result = validateGameContent('games/bad-layout.html', badLayout);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((issue) => issue.includes('bare fr value'))).toBe(true);
+    expect(result.issues.some((issue) => issue.includes('table wrapper selector'))).toBe(true);
+
+    const goodLayout = badLayout.replace('grid-template-columns: fr 1fr', 'grid-template-columns: 1fr 1fr').replace('table-wrapper { overflow:auto; }', '.table-wrapper { overflow:auto; }');
+    expect(validateGameContent('games/good-layout.html', goodLayout).issues).toEqual([]);
+  });
+
   test('prompts require post-save validation', () => {
     const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
     for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT]) {

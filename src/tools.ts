@@ -68,6 +68,15 @@ function isAllowedUrl(url: string): boolean {
 }
 
 function validateHtmlGame(content: string, issues: string[]) {
+  if (/(?:grid-template-(?:columns|rows)|grid-auto-(?:columns|rows))\s*:\s*(?:fr\b|repeat\(\s*fr\b)/i.test(content)) {
+    issues.push('CSS grid track sizes must include a number before fr (for example 1fr), not a bare fr value.');
+  }
+
+  if (/<(?:table|div)[^>]*(?:class|id)\s*=\s*["'][^"']*table-wrapper[^"']*["']/i.test(content) &&
+      /<table\b/i.test(content) && !/\.table-wrapper\s*\{[^}]*\boverflow(?:-y)?\s*:/is.test(content)) {
+    issues.push('The table wrapper selector must match the HTML class and define overflow on .table-wrapper so rows remain reachable in the viewport.');
+  }
+
   if (/(?:^|[^\w$.])event\.(?:target|currentTarget)\b/i.test(content)) {
     issues.push('HTML reads the global event target: pass the event or clicked element explicitly so initial rendering works without a browser event.');
   }
