@@ -130,5 +130,7 @@ describe('validateGameFile', () => {
     expect(CREATE_SYSTEM_PROMPT).toContain('save_game instructions metadata');
     expect(UI_SYSTEM_PROMPT).toContain('Render every chart on initialization');
     expect(UI_SYSTEM_PROMPT).toContain('never read the global `event` object');
+    expect(UI_SYSTEM_PROMPT).toContain('min-height:0; overflow:auto');
+    expect(UI_SYSTEM_PROMPT).toContain('table headers must match their cell columns');
   });
 });
