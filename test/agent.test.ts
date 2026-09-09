@@ -100,6 +100,19 @@ describe('validateGameFile', () => {
     expect(validateGameContent('games/good-game.html', raw).valid).toBe(true);
   });
 
+  test('rejects event-dependent initialization and uncolored chart bars', () => {
+    const badChart = '<body style="margin:0;width:100vw;height:100vh;overflow:hidden"><div id="chart"></div><script>function render(){const bar=document.createElement("div"); bar.className="bar"; chart.appendChild(bar)}; render(); event.target.classList.add("active")</script></body>';
+    const result = validateGameContent('games/bad-chart.html', badChart);
+    expect(result.valid).toBe(false);
+    expect(result.issues.some((issue) => issue.includes('global event target'))).toBe(true);
+    expect(result.issues.some((issue) => issue.includes('Chart bars must assign'))).toBe(true);
+
+    const coloredChart = badChart.replace('event.target.classList.add("active")', 'bar.style.backgroundColor = "#2563eb"; render()');
+    const colored = validateGameContent('games/good-chart.html', coloredChart);
+    expect(colored.issues.some((issue) => issue.includes('Chart bars must assign'))).toBe(false);
+    expect(colored.issues.some((issue) => issue.includes('global event target'))).toBe(false);
+  });
+
   test('prompts require post-save validation', () => {
     const gamePrompt = loadConfig({}, { skipApiKey: true }).systemPrompt;
     for (const prompt of [gamePrompt, CREATE_SYSTEM_PROMPT]) {

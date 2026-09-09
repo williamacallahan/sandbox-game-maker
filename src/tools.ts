@@ -68,6 +68,15 @@ function isAllowedUrl(url: string): boolean {
 }
 
 function validateHtmlGame(content: string, issues: string[]) {
+  if (/(?:^|[^\w$.])event\.(?:target|currentTarget)\b/i.test(content)) {
+    issues.push('HTML reads the global event target: pass the event or clicked element explicitly so initial rendering works without a browser event.');
+  }
+
+  const rendersBars = /(?:className|classList\.add|class\s*=)[^\n;]{0,80}\bbar\b/i.test(content);
+  if (rendersBars && !/(?:background(?:Color)?|fill)\s*[:=]/i.test(content)) {
+    issues.push('Chart bars must assign an explicit background, backgroundColor, or fill so every bar is visible.');
+  }
+
   // No external network requests.
   for (const match of content.matchAll(/<script[^>]*src\s*=\s*["']([^"']+)["']/gi)) {
     const url = match[1].trim();
