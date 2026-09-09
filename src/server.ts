@@ -29,6 +29,11 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'NoSuchKey');
 }
 
+function enrichGamePrompt(prompt: string, mode: string | undefined): string {
+  if (mode !== 'game' || !/\b(?:3d|drivable|driving|free[- ]?range|streets?|car|vehicle)\b/i.test(prompt)) return prompt;
+  return `${prompt}\n\nGame acceptance contract: translate this objective into a playable world, not a dashboard or an auto-scrolling road. Use independent world x/z position, heading, signed speed with reverse, an intersecting or branching road graph with turn choices, collision boundaries, traffic or obstacles, an orientation/minimap cue, and reachable named landmarks or destinations. Keep each mechanic connected to state, update, rendering, and visible controls. Before saving, exercise acceleration, steering through a turn, reverse, collision handling, and landmark progress; preserve the same filename and validate it.`;
+}
+
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
   idleTimeout: 255, // generation runs minutes; default 10s kills the NDJSON stream
@@ -153,9 +158,10 @@ const server = Bun.serve({
       const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
       if (!prompt) return json({ error: 'prompt is required' }, 400);
 
+      const mode = body.mode === 'game' || body.mode === 'create' || body.mode === 'ui' ? body.mode : undefined;
+      const effectivePrompt = enrichGamePrompt(prompt, mode);
       const overrides: Partial<AgentConfig> = {};
       try {
-        const mode = body.mode === 'game' || body.mode === 'create' || body.mode === 'ui' ? body.mode : undefined;
         for (const key of ['systemPrompt', 'model'] as const) {
           if (typeof body[key] === 'string' && body[key].trim()) overrides[key] = body[key].trim();
         }
@@ -181,7 +187,7 @@ const server = Bun.serve({
         return json({ error: err.message }, 400);
       }
 
-      const existingFile = typeof body.existingFile === 'string' && body.existingFile.trim() ? body.existingFile.trim() : null;
+        const existingFile = typeof body.existingFile === 'string' && body.existingFile.trim() ? body.existingFile.trim() : null;
       if (existingFile && !GAME_FILENAME.test(existingFile)) {
         return json({ error: `existingFile must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
       }
@@ -214,9 +220,9 @@ const server = Bun.serve({
         const originalInstructions = existing.post.instructions ?? 'none';
         // The source goes in the prompt as plain text. A read_file result is a JSON string, and small models
         // (oui-1) copy its \n and \" escapes into save_game content verbatim, saving an unrenderable document.
-        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nIts complete current source follows; do not call read_file.\n\n${existing.content}\n\nApply this change request to that source and overwrite the same file with save_game (use the same filename "${existingFile}" and pass the whole updated document as content). Validate the result with validate_game before finishing.\n\nChange request: ${prompt}`;
+        fullPrompt = `Improve the existing game saved as "games/${existingFile}". The original prompt was: "${existing.post.prompt}". The original player instructions were: "${originalInstructions}".\n\nIts complete current source follows; do not call read_file.\n\n${existing.content}\n\nApply this change request to that source and overwrite the same file with save_game (use the same filename "${existingFile}" and pass the whole updated document as content). Validate the result with validate_game before finishing.\n\nChange request: ${effectivePrompt}`;
       } else {
-        fullPrompt = wantedFile ? `${prompt}\n\nSave the file as exactly "${wantedFile}".` : prompt;
+        fullPrompt = wantedFile ? `${effectivePrompt}\n\nSave the file as exactly "${wantedFile}".` : effectivePrompt;
       }
 
       // Late callbacks (onTurnEnd metadata) and client disconnects must never enqueue on a closed

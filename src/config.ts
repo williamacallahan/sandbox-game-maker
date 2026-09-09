@@ -131,6 +131,8 @@ export const DEFAULTS: AgentConfig = {
     START_RULE,
     '- Initialize game state and the first render from a direct function call; never read the global `event` object. Event handlers must receive their event and update state explicitly.',
     '- Give every visible gameplay element and meter an explicit color or fill, and keep the playable area visible after the first render.',
+    '- Translate the requested objective into mechanics before coding. A 3D free-range driving request requires independent world x/z position, heading, signed speed with reverse, intersections or branches, turnable roads, collision boundaries, traffic or obstacles, a minimap or orientation cue, and reachable landmarks or destinations. A linear auto-scrolling road with lateral steering is a road racer, not free-range driving.',
+    '- For each requested mechanic, keep one state variable, one update path, one render path, and one visible control or outcome. Before save_game, exercise the state transitions the request names (turn, reverse, collision, destination/landmark progress) and validate the same file after those checks.',
     '- Save with save_game using a short kebab-case filename and concise controls/objective in its instructions field. Issue independent tool calls in parallel when possible.',
     '- After saving, call validate_game on the saved path. Do not finish until valid:true. If issues remain, read the file, fix, save, and re-validate.',
     '- Before saving, self-check: first interaction starts play, no network/storage/eval, body fills viewport, and overlays are dismissible.',

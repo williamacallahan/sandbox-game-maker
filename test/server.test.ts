@@ -101,4 +101,17 @@ describe('POST /api/generate (Improve)', () => {
     expect(sent.instructions).not.toBe(UI_SYSTEM_PROMPT);
     expect(sent.instructions).toContain('small, playable one-shot games');
   });
+
+  test('expands 3D driving objectives into concrete Game acceptance mechanics', async () => {
+    const before = upstreamBodies.length;
+    const { status } = await improve({
+      mode: 'game',
+      prompt: 'Make a free-range 3D drivable city with streets and landmarks',
+    });
+    expect(status).toBe(200);
+    const sent = upstreamBodies[before];
+    expect(sent.input).toContain('independent world x/z position');
+    expect(sent.input).toContain('intersecting or branching road graph');
+    expect(sent.input).toContain('exercise acceleration, steering through a turn, reverse');
+  });
 });
