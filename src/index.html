@@ -433,6 +433,17 @@ function postCard(p) {
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   const versionsSelect = $('.versions', card);
   const selectedVersion = () => (versionsSelect.hidden ? '' : versionsSelect.value);
+  const loadCurrentPost = async () => {
+    const sequence = ++card._metaSeq;
+    const versionId = selectedVersion();
+    const response = await fetch('/api/post/' + encodeURIComponent(p.file) + (versionId ? '?versionId=' + encodeURIComponent(versionId) : ''));
+    const post = await response.json();
+    if (!response.ok) throw new Error(post.error ?? response.statusText);
+    if (sequence !== card._metaSeq || !card.isConnected) return;
+    current = post;
+    fillMeta(card, post);
+    return post;
+  };
   // After a delete or a promotion the newest version is current: reload the list and show it as Latest.
   const showLatest = async () => {
     await loadVersions(p.file, versionsSelect, card);
@@ -440,7 +451,15 @@ function postCard(p) {
     versionsSelect.dispatchEvent(new Event('change'));
   };
   // Improve the version on screen, not silently the latest one.
-  $('.improve', card).addEventListener('click', () => openImprove(p.file, current, selectedVersion()));
+  $('.improve', card).addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const post = await loadCurrentPost();
+      if (post) openImprove(p.file, post, selectedVersion());
+    } catch (error) { alert('Could not load edit settings: ' + error.message); }
+    finally { button.disabled = false; }
+  });
   $('.delete', card).addEventListener('click', async () => {
     const versionId = selectedVersion();
     const onlyVersion = versionsSelect.hidden || versionsSelect.options.length <= 1;
@@ -475,7 +494,6 @@ function postCard(p) {
     }
   });
   versionsSelect.addEventListener('change', async () => {
-    const sequence = ++card._metaSeq;
     const versionId = versionsSelect.value;
     setCurrent.hidden = !versionId;
     const query = versionId ? 'versionId=' + encodeURIComponent(versionId) : '';
@@ -483,12 +501,7 @@ function postCard(p) {
     sleep();
     wake();
     try {
-      const res = await fetch('/api/post/' + encodeURIComponent(p.file) + (query && '?' + query));
-      if (!res.ok) throw new Error(res.statusText);
-      const post = await res.json();
-      if (sequence !== card._metaSeq || !card.isConnected) return;
-      current = post;
-      fillMeta(card, current);
+      await loadCurrentPost();
     } catch {}
   });
   loadVersions(p.file, versionsSelect, card);
@@ -497,10 +510,14 @@ function postCard(p) {
     ['.details-btn', '.settings-panel'],
   ]) {
     const button = $(buttonSelector, card);
-    button.addEventListener('click', () => {
+    button.addEventListener('click', async () => {
       const panel = $(panelSelector, card);
       panel.hidden = !panel.hidden;
       button.setAttribute('aria-expanded', String(!panel.hidden));
+      if (!panel.hidden) {
+        try { await loadCurrentPost(); }
+        catch (error) { panelError(panel, error.message); }
+      }
     });
   }
 

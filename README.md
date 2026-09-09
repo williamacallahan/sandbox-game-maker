@@ -66,7 +66,7 @@ The agent streams the generation, calls `save_game` and `validate_game`, and sav
 
 ### Gallery performance and game isolation
 
-The gallery loads up to ten creations at a time and loads the next page as you scroll. Game code does not run in the gallery, including while a new creation is being generated. Open a game explicitly to play it in a separate tab; close that tab to stop it. Details and version history load when requested.
+The gallery loads up to ten creations at a time and loads the next page as you scroll. Visible games run inline in sandboxed square frames. Frames unload when offscreen or when the page is hidden, and restart when visible again. Details and edit settings load on request; selecting a version updates both playback and metadata.
 
 Game documents run with a server-enforced sandbox and cannot access the gallery, fetch network resources, create workers, or embed other pages. The terminal player allows only its pinned terminal library. A failed game can be closed without navigating away from the gallery. Browser sandboxing does not provide a hard CPU or memory quota; the browser and operating system control those limits.
 
