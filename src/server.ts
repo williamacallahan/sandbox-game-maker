@@ -155,8 +155,21 @@ const server = Bun.serve({
 
       const overrides: Partial<AgentConfig> = {};
       try {
+        const mode = body.mode === 'game' || body.mode === 'create' || body.mode === 'ui' ? body.mode : undefined;
         for (const key of ['systemPrompt', 'model'] as const) {
           if (typeof body[key] === 'string' && body[key].trim()) overrides[key] = body[key].trim();
+        }
+        if (mode === 'game') {
+          overrides.systemPrompt = defaults.systemPrompt;
+          overrides.model = defaults.model;
+        } else if (mode === 'create') {
+          overrides.systemPrompt = CREATE_SYSTEM_PROMPT;
+          overrides.model = defaults.model;
+        } else if (mode === 'ui') {
+          overrides.systemPrompt = UI_SYSTEM_PROMPT;
+          overrides.model = UI_DEFAULTS.model;
+          overrides.maxContextTokens = UI_DEFAULTS.maxContextTokens;
+          overrides.maxOutputTokens = UI_DEFAULTS.maxOutputTokens;
         }
         for (const key of ['maxToolCalls', 'maxContextTokens', 'maxOutputTokens', 'maxReasoningTokens', 'maxCost'] as const) {
           if (body[key] != null && body[key] !== '') overrides[key] = positiveNumber(key, String(body[key]));

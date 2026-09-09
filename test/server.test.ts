@@ -91,4 +91,14 @@ describe('POST /api/generate (Improve)', () => {
     expect(status).toBe(502);
     expect(text).toContain('Versioned reads require S3 storage');
   });
+
+  test('canonical mode remaps stale Improve settings before the model call', async () => {
+    const before = upstreamBodies.length;
+    const { status } = await improve({ mode: 'game', model: 'oui-1', systemPrompt: UI_SYSTEM_PROMPT });
+    expect(status).toBe(200);
+    const sent = upstreamBodies[before];
+    expect(sent.model).not.toBe('oui-1');
+    expect(sent.instructions).not.toBe(UI_SYSTEM_PROMPT);
+    expect(sent.instructions).toContain('small, playable one-shot games');
+  });
 });
