@@ -127,7 +127,7 @@ Pause new generation and run the migration against the current server’s output
 bun run scripts/migrate-games.ts /path/to/current/games
 ```
 
-The migration copies game content, instructions, and legacy feed metadata. It skips names already present in object storage and leaves source files untouched. Keep other writers stopped until it finishes, then start the app with the same storage settings. Re-running it skips previously copied games. Files already lost with an old container cannot be recovered by this migration.
+The migration copies game content, instructions, and legacy feed metadata. A name already present in object storage is skipped, unless its stored record has no `settings` and the local one does: then the stored game is rewritten with its own content plus those settings, so every record shares one shape. Source files are left untouched. Keep other writers stopped until it finishes, then start the app with the same storage settings. Re-running it skips previously copied games. Files already lost with an old container cannot be recovered by this migration.
 
 ### Verify storage integration
 

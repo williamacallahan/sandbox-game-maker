@@ -14,20 +14,25 @@ try {
   const destination = createGameStorage(temporary);
   if (destination.mode !== 's3') throw new Error('Configure all GAME_STORAGE_* variables before migrating.');
   const local = createGameStorage(resolve(source), {});
-  const existing = new Set((await destination.list()).map((post) => post.file));
+  const existing = new Map((await destination.list()).map((post) => [post.file, post]));
   let copied = 0;
+  let backfilled = 0;
   let skipped = 0;
   for (const post of await local.list()) {
     if (!post.file) continue;
-    if (existing.has(post.file)) {
+    const stored = existing.get(post.file);
+    if (stored?.settings || (stored && !post.settings)) {
       skipped++;
       continue;
     }
-    const game = await local.read(post.file);
-    await destination.save(post.file, game.content, game.post);
-    copied++;
+    // A stored game without settings (saved before they were recorded) is rewritten with the same content
+    // plus the local settings, so every record shares one shape.
+    const game = stored ? await destination.read(post.file) : await local.read(post.file);
+    const { stats, ...metadata } = game.post; // stats live in their own object, never inside the record
+    await destination.save(post.file, game.content, { ...metadata, settings: post.settings }, Boolean(stored));
+    if (stored) backfilled++; else copied++;
   }
-  console.log(`Migration complete: ${copied} copied, ${skipped} already stored. Source files unchanged.`);
+  console.log(`Migration complete: ${copied} copied, ${backfilled} backfilled with settings, ${skipped} already stored. Source files unchanged.`);
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }
