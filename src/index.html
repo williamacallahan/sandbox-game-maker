@@ -480,7 +480,7 @@ function postCard(p) {
       const res = await fetch('/api/versions/' + encodeURIComponent(p.file) + (onlyVersion ? '' : '?versionId=' + encodeURIComponent(versionId)), { method: 'DELETE' });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? res.statusText);
-      if (body.remaining === 0) { card._dispose(); card.remove(); if (!$('#feed article')) $('#feed').innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
+      if (body.remaining === 0) { card.remove(); if (!$('#feed article')) $('#feed').innerHTML = '<p class="empty">no creations yet — post one above</p>'; return; }
       await showLatest();
     } catch (err) {
       alert('Could not delete: ' + err.message);
@@ -538,7 +538,7 @@ async function loadFeed(reset = false) {
   const page = await response.json();
   if (!response.ok) { feedLoading = false; throw new Error(page.error ?? response.statusText); }
   const feed = $('#feed');
-  if (reset) { feed.querySelectorAll('article').forEach(card => card._dispose?.()); feed.innerHTML = ''; feedCursor = null; }
+  if (reset) { feed.innerHTML = ''; feedCursor = null; }
   if (!page.posts.length && !feed.querySelector('article')) feed.innerHTML = '<p class="empty">no creations yet — post one above</p>';
   for (const p of page.posts) if (!feed.querySelector('article[data-file="' + CSS.escape(p.file) + '"]')) feed.append(postCard(p));
   feedCursor = page.nextCursor;
@@ -623,7 +623,6 @@ async function finishGeneration(pending, finishedPosts) {
     for (const post of finishedPosts) {
       // Regenerating an existing filename replaces its card instead of duplicating it.
       const oldCard = $('#feed article[data-file="' + CSS.escape(post.file) + '"]');
-      oldCard?._dispose?.();
       oldCard?.remove();
       $('#feed').prepend(postCard(post));
     }

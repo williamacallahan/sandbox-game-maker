@@ -125,9 +125,13 @@ describe('POST /api/generate (Improve)', () => {
     expect(text).toContain('Versioned reads require S3 storage');
   });
 
-  test('gallery permits same-host game frames while game responses retain opaque sandbox isolation', async () => {
+  test('gallery links games into isolated tabs while game responses retain opaque sandbox isolation', async () => {
     const root = await fetch(base);
     expect(root.headers.get('content-security-policy')).toContain("frame-src 'self'");
+    const gallery = await root.text();
+    expect(gallery).not.toContain('<iframe');
+    expect(gallery).not.toContain('_dispose');
+    expect(gallery).toContain('class="play-link" href="\' + esc(src) + \'" target="_blank" rel="noopener noreferrer"');
     const game = await fetch(`${base}/games/poster.html`);
     const policy = game.headers.get('content-security-policy');
     expect(policy).toContain('sandbox allow-scripts;');
