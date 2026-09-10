@@ -185,6 +185,15 @@ describe('POST /api/generate (Improve)', () => {
     expect(sent.model).toBe('qwen3.8-flash-prod-users');
   });
 
+  test('remaps stale UI settings when an Improve request explicitly selects Game', async () => {
+    const before = upstreamBodies.length;
+    const { status } = await improve({ mode: 'game', model: 'oui-1', systemPrompt: UI_SYSTEM_PROMPT });
+    expect(status).toBe(200);
+    const sent = upstreamBodies[before];
+    expect(sent.model).toBe('qwen3.8-flash-prod-users');
+    expect(sent.instructions).toBe(loadConfig({}, { skipApiKey: true }).systemPrompt);
+  });
+
   test('sends an NDJSON status before a delayed upstream completes', async () => {
     const upstreamStarted = new Promise<void>((resolve) => { delayedUpstreamStarted = resolve; });
     const response = fetch(`${base}/api/generate`, {

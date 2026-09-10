@@ -664,7 +664,10 @@ async function finishGeneration(pending, finishedPosts) {
 
 async function generate() {
   postBtn.disabled = true;
-  const requestedMode = $('.chip.on').dataset.mode;
+  const selectedMode = $('.chip.on').dataset.mode;
+  const requestedMode = improveFile && selectedMode === 'ui' && /\b(?:free[- ]?roam|drivable|driving|3d streets?|open[- ]world)\b/i.test(promptEl.value)
+    ? 'game'
+    : selectedMode;
   const pending = $('#pending');
   pending.innerHTML =
     '<section class="card"><div class="card-head"><div class="spinner"></div>' +

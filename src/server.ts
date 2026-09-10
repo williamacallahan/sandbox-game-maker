@@ -164,6 +164,8 @@ const server = Bun.serve({
       if (!prompt) return json({ error: 'prompt is required' }, 400);
 
       const requestedMode = body.mode === 'game' || body.mode === 'create' || body.mode === 'ui' ? body.mode : undefined;
+      const staleUiModel = requestedMode === 'game' && body.model === UI_DEFAULTS.model;
+      const staleUiPrompt = requestedMode === 'game' && body.systemPrompt === UI_SYSTEM_PROMPT;
       const existingFile = typeof body.existingFile === 'string' && body.existingFile.trim() ? body.existingFile.trim() : null;
       if (existingFile && !GAME_FILENAME.test(existingFile)) {
         return json({ error: `existingFile must be lowercase kebab-case ending in .html or .js with no underscores, e.g. "my-game.html"` }, 400);
@@ -191,7 +193,7 @@ const server = Bun.serve({
       const overrides: Partial<AgentConfig> = { mode };
       try {
         for (const key of ['systemPrompt', 'model'] as const) {
-          if (typeof body[key] === 'string' && body[key].trim()) overrides[key] = body[key].trim();
+          if (!(key === 'model' ? staleUiModel : staleUiPrompt) && typeof body[key] === 'string' && body[key].trim()) overrides[key] = body[key].trim();
         }
         for (const key of ['maxToolCalls', 'maxContextTokens', 'maxOutputTokens', 'maxReasoningTokens', 'maxCost'] as const) {
           if (body[key] != null && body[key] !== '') overrides[key] = positiveNumber(key, String(body[key]));
