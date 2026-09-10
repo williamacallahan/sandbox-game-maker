@@ -100,9 +100,10 @@
   .stream .tool { color: #7ab8ff; }
   .stream:empty { display: none; }
 
-  /* Keep gallery cards cheap; creations run only in a new tab. */
-  .feed-card { content-visibility: auto; contain-intrinsic-size: auto 520px; }
-  .media { aspect-ratio: 1 / .68; display: grid; place-items: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: linear-gradient(145deg, #fcf6ff 0%, #f5f8ff 48%, #fff9f1 100%); }
+  /* Keep only visible creations alive; each game runs in its own sandboxed iframe. */
+  .feed-card { contain-intrinsic-size: auto 520px; }
+  .media { aspect-ratio: 1 / 1; display: grid; place-items: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: linear-gradient(145deg, #fcf6ff 0%, #f5f8ff 48%, #fff9f1 100%); }
+  .game-frame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
   .placeholder { display: grid; place-items: center; gap: 10px; color: #4d4b63; text-align: center; }
   .placeholder-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: #fff; box-shadow: 0 8px 24px rgba(66, 58, 105, .12); font-size: 30px; }
   .placeholder small { color: var(--muted); }
@@ -379,9 +380,9 @@ function postCard(p) {
   const name = String(p.file ?? 'unavailable creation');
   const isJs = name.endsWith('.js');
   const unavailable = p.unavailable === true;
-  // .js terminal games open through the server's ?play xterm runner.
+  // .js terminal games play in the page via the server's ?play xterm runner.
   const src = gameUrl(p.file);
-  const media = '<div class="media" data-game-media><div class="placeholder"><div class="placeholder-icon">' + (unavailable ? '⚠️' : (isJs ? '⌨️' : '🕹️')) + '</div><b>' + (unavailable ? 'Creation unavailable' : 'Open to play') + '</b><small>' + (unavailable ? 'Use Details or Improve to retry metadata.' : 'Runs in an isolated tab') + '</small></div></div>';
+  const media = '<div class="media" data-game-media>' + (unavailable ? '<div class="placeholder"><div class="placeholder-icon">⚠️</div><b>Creation unavailable</b><small>Use Details or Improve to retry metadata.</small></div>' : '<iframe class="game-frame" loading="lazy" sandbox="allow-scripts" title="' + esc(name) + '" data-src="' + esc(src) + '"></iframe>') + '</div>';
   card.innerHTML =
     '<div class="card-head"><div class="avatar"><span>' + (isJs ? '⌨️' : '🕹️') + '</span></div>' +
     '<div class="who"><b>' + esc(name) + '</b><small></small></div>' +
@@ -391,7 +392,7 @@ function postCard(p) {
     '<div class="detail-panel settings-panel" hidden></div>' +
     media +
     '<div class="actions"><button class="like" title="like">' + HEART + '</button>' +
-    (unavailable ? '' : '<a class="play-link" href="' + esc(src) + '" target="_blank" rel="noopener noreferrer" title="open game in isolated tab">' + OPEN + ' Play / Open</a>') +
+    (unavailable ? '' : '<button class="play-link" type="button" title="focus game in viewport">' + OPEN + ' Play</button>') +
     '<button class="history" type="button" title="load version history" aria-expanded="false">History</button>' +
     '<button class="improve" type="button" title="improve this game">Improve</button>' +
     '<button class="delete" type="button" title="delete this version">Delete</button>' +
@@ -401,6 +402,31 @@ function postCard(p) {
   // The version shown right now; the select swaps both the file and this metadata.
   let current = p;
   fillMeta(card, current);
+
+  const frame = $('.game-frame', card);
+  let inViewport = false;
+  const wake = () => {
+    if (frame && inViewport && !document.hidden && frame.getAttribute('src') !== frame.dataset.src) frame.src = frame.dataset.src;
+  };
+  const sleep = () => frame?.removeAttribute('src');
+  const onVisibility = () => document.hidden ? sleep() : wake();
+  const visibility = new IntersectionObserver(([entry]) => {
+    inViewport = entry.isIntersecting;
+    if (inViewport) wake(); else sleep();
+  });
+  if (frame) {
+    visibility.observe(frame);
+    document.addEventListener('visibilitychange', onVisibility);
+    $('.play-link', card).addEventListener('click', () => {
+      frame.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      frame.focus();
+    });
+  }
+  card._dispose = () => {
+    visibility.disconnect();
+    document.removeEventListener('visibilitychange', onVisibility);
+    sleep();
+  };
 
   $('.like', card).addEventListener('click', (e) => e.currentTarget.classList.toggle('liked'));
   const versionsSelect = $('.versions', card);
@@ -505,7 +531,9 @@ function postCard(p) {
   versionsSelect.addEventListener('change', async () => {
     const versionId = versionsSelect.value;
     setCurrent.hidden = !versionId;
-    $('.play-link', card).href = gameUrl(p.file, versionId);
+    if (frame) frame.dataset.src = gameUrl(p.file, versionId);
+    sleep();
+    wake();
     try {
       await loadCurrentPost();
     } catch {}
@@ -547,7 +575,8 @@ async function loadFeed(reset = false) {
   feedLoading = false;
 }
 
-// Show generated content in the pending card; play it from the saved post.
+// Live-render a just-written file inside the pending card, straight from the
+// save_game args (full content streams through the event — no server fetch).
 function showPreview(args) {
   let media = $('#pending .media');
   if (!media) {
