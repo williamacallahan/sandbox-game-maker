@@ -100,7 +100,10 @@ if (!prompt) {
 let config: AgentConfig;
 try {
   const overrides: Partial<AgentConfig> = {};
-  if (values.create) overrides.systemPrompt = CREATE_SYSTEM_PROMPT;
+  if (values.create) {
+    overrides.mode = 'create';
+    overrides.systemPrompt = CREATE_SYSTEM_PROMPT;
+  }
   if (values.system) overrides.systemPrompt = values.system;
   if (values.model) overrides.model = values.model;
   if (values.reasoning) overrides.reasoningEffort = reasoningEffort('--reasoning', values.reasoning);

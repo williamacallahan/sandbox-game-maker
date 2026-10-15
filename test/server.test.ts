@@ -19,12 +19,19 @@ function completedResponse(output: unknown[], model = 'save-test') {
 // Every Improve request must reach the model with the system prompt, the change request, and the full stored source.
 describe('POST /api/generate (Improve)', () => {
   const upstreamBodies: any[] = [];
+  const upstreamHeaders: Headers[] = [];
+  let catalogHeaders: Headers | undefined;
   let releaseDelayedUpstream: (() => void) | undefined;
   let delayedUpstreamStarted: (() => void) | undefined;
   const upstream = Bun.serve({
     port: 0,
     async fetch(req) {
+      if (new URL(req.url).pathname.endsWith('/models')) {
+        catalogHeaders = req.headers;
+        return Response.json({ data: [] });
+      }
       if (!new URL(req.url).pathname.endsWith('/responses')) return new Response('not found', { status: 404 });
+      upstreamHeaders.push(req.headers);
       const body = await req.json();
       upstreamBodies.push(body);
       if (body.model === 'delayed-test') {
@@ -95,18 +102,40 @@ describe('POST /api/generate (Improve)', () => {
     ['game', loadConfig({}, { skipApiKey: true }).systemPrompt],
     ['create', CREATE_SYSTEM_PROMPT],
     ['ui', UI_SYSTEM_PROMPT],
-  ])('%s mode sends system prompt, change request, and the full source', async (_mode, systemPrompt) => {
+  ])('%s mode sends system prompt, change request, and the full source', async (mode, systemPrompt) => {
     const before = upstreamBodies.length;
-    const { status } = await improve({ systemPrompt });
+    const { status } = await improve({ mode, systemPrompt });
     expect(status).toBe(200);
     expect(upstreamBodies.length).toBe(before + 1);
     const sent = upstreamBodies[before];
+    expect(upstreamHeaders[before]?.get('x-user-id')).toBe(`sandbox-game-maker:${mode}Agent`);
     expect(sent.instructions).toBe(systemPrompt);
     expect(sent.input).toContain(SOURCE);
     expect(sent.input).toContain('Change request: add a toolbar');
     expect(sent.input).toContain('do not call read_file');
     expect(sent.input).toContain('Apply this change request with edit_game');
     expect(sent.input).toContain('do not re-emit the whole document with save_game');
+  });
+
+  test('catalog request identifies its workload', async () => {
+    const result = await fetch(`${base}/api/models`);
+    expect(result.status).toBe(200);
+    expect(catalogHeaders?.get('x-user-id')).toBe('sandbox-game-maker:modelCatalog');
+    expect(catalogHeaders?.get('authorization')).toBe('Bearer test-key');
+  });
+
+  test('CLI create carries the selected mode to the gateway', async () => {
+    const before = upstreamBodies.length;
+    const child = Bun.spawn(['bun', resolve('src/cli.ts'), '--create', '--quiet', '--model', 'cli-test', '--out', join(dir, 'cli'), 'a poster'], {
+      cwd: dir,
+      env: { ...process.env, LLM_API_KEY: 'test-key', LLM_BASE_URL: `http://127.0.0.1:${upstream.port}/v1` },
+      stdout: 'ignore', stderr: 'pipe',
+    });
+    await new Response(child.stderr).text();
+    await child.exited;
+    expect(upstreamHeaders[before]?.get('x-user-id')).toBe('sandbox-game-maker:createAgent');
+    expect(upstreamBodies[before].model).toBe('cli-test');
+    expect(upstreamBodies[before].instructions).toBe(CREATE_SYSTEM_PROMPT);
   });
 
   test('POST /api/versions/<file>?versionId= makes that version current', async () => {

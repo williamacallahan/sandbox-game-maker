@@ -105,7 +105,9 @@ export async function runAgent(
   // Running totals from onTurnEnd, so a run that fails after save_game still records its usage.
   const turnTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reasoningTokens: 0, cost: 0, costSeen: false };
   let statsSaved = false;
-  const headers: Record<string, string> = cacheKey ? { 'X-LGW-Cache-Key': cacheKey } : { 'X-OpenRouter-Metadata': 'enabled' };
+  const headers: Record<string, string> = cacheKey
+    ? { 'X-LGW-Cache-Key': cacheKey, 'X-User-ID': `sandbox-game-maker:${config.mode ?? 'game'}Agent` }
+    : { 'X-OpenRouter-Metadata': 'enabled' };
   const responseHook: AfterSuccessHook = {
     afterSuccess: async (context, response) => {
       providerFromHeaders = response.headers.get('x-lgw-attempt-providers')?.split(',').at(-1) ?? null;

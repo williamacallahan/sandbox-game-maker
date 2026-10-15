@@ -63,7 +63,7 @@ const server = Bun.serve({
       if (!modelsCache) {
         // The catalog comes from whichever endpoint serves generation, so a gateway's own aliases (e.g. oui-1) are listed.
         const res = defaults.baseUrl
-          ? await fetch(defaults.baseUrl.replace(/\/$/, '') + '/models', { headers: { Authorization: `Bearer ${defaults.apiKey}` } })
+          ? await fetch(defaults.baseUrl.replace(/\/$/, '') + '/models', { headers: { Authorization: `Bearer ${defaults.apiKey}`, 'X-User-ID': 'sandbox-game-maker:modelCatalog' } })
           : await fetch('https://openrouter.ai/api/v1/models');
         if (!res.ok) return json({ error: `/v1/models returned ${res.status}` }, 502);
         modelsCache = await res.text();
