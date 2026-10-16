@@ -1,4 +1,5 @@
 import { OpenRouter } from '@openrouter/agent';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { Item } from '@openrouter/agent';
 import { stepCountIs, maxCost } from '@openrouter/agent/stop-conditions';
 import { generationsGetGeneration } from '@openrouter/sdk/funcs/generationsGetGeneration.js';
@@ -65,7 +66,11 @@ export type RunAgentOptions = {
 };
 
 const GatewayUsage = z.object({
-  by_model: z.array(z.object({ total_cost: z.number() })),
+  by_model: z.array(z.object({
+    total_cost: z.number(),
+    unpriced_generation_count: z.number().int().nullish(),
+    cost_complete: z.boolean().nullish(),
+  })),
 });
 
 function providerFromMeta(meta: OpenRouterMetadata | undefined): string | null {
@@ -102,7 +107,7 @@ export async function runAgent(
   let firstTokenAt: number | null = null;
   let toolCallId = '';
 
-  // Running totals from onTurnEnd, so a run that fails after save_game still records its usage.
+  // PostModelCall includes the initial save response even if its follow-up fails or is aborted.
   const turnTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reasoningTokens: 0, cost: 0, costSeen: false };
   let statsSaved = false;
   const headers: Record<string, string> = cacheKey
@@ -171,6 +176,14 @@ export async function runAgent(
       parallelToolCalls: false,
       toolConcurrency: 1,
       hooks: {
+        PostModelCall: [{ handler: ({ usage }) => {
+          if (!usage) return;
+          turnTotals.inputTokens += usage.inputTokens;
+          turnTotals.outputTokens += usage.outputTokens;
+          turnTotals.totalTokens += usage.totalTokens;
+          turnTotals.reasoningTokens += usage.reasoningTokens;
+          if (usage.cost != null) { turnTotals.cost += usage.cost; turnTotals.costSeen = true; }
+        } }],
         PreToolUse: [{ handler: ({ toolName, toolInput }) => {
           options?.signal?.throwIfAborted();
           toolCallId = crypto.randomUUID();
@@ -227,13 +240,6 @@ export async function runAgent(
         if (upstream != null) {
           upstreamCost = (upstreamCost ?? 0) + upstream;
         }
-        if (u) {
-          turnTotals.inputTokens += u.inputTokens;
-          turnTotals.outputTokens += u.outputTokens;
-          turnTotals.totalTokens += u.totalTokens;
-          turnTotals.reasoningTokens += u.outputTokensDetails?.reasoningTokens ?? 0;
-          if (u.cost != null) { turnTotals.cost += u.cost; turnTotals.costSeen = true; }
-        }
         if (u && options?.onEvent) {
           const provider = providerFromMeta(response.openrouterMetadata) ?? providerFromHeaders;
           options.onEvent({
@@ -275,27 +281,6 @@ export async function runAgent(
     if (response.status !== 'completed') throw new Error('Model response did not complete.');
     const totals = await result.getUsage();
     const durationMs = Date.now() - startedAt;
-    let gatewayCost: number | null = null;
-    if (config.baseUrl && cacheKey && providerFromHeaders) {
-      const usageUrl = new URL('../api/usage/session', config.baseUrl);
-      usageUrl.searchParams.set('cache_key', cacheKey);
-      try {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const usageResponse = await fetch(usageUrl, { headers: { Authorization: `Bearer ${config.apiKey}` } });
-          if (usageResponse.ok) {
-            gatewayCost = GatewayUsage.parse(await usageResponse.json()).by_model.reduce((sum, row) => sum + row.total_cost, 0);
-            break;
-          }
-          if (usageResponse.status !== 503) {
-            console.error(`Could not fetch gateway usage from ${usageUrl}: HTTP ${usageResponse.status}`);
-            break;
-          }
-          await Bun.sleep(Number(usageResponse.headers.get('retry-after') ?? 1) * 1000);
-        }
-      } catch (error) {
-        console.error(`Could not fetch gateway usage: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
     const generation = !config.baseUrl && response.id ? await fetchGeneration(client, response.id, headers) : null;
     const stats = buildStats({
       provider: providerFromMeta(response.openrouterMetadata) ?? providerFromHeaders ?? generation?.providerName ?? null,
@@ -304,7 +289,7 @@ export async function runAgent(
           ? Math.round((generation.nativeTokensCompletion / generation.generationTime) * 1000)
           : null,
       usage: totals,
-      cost: gatewayCost ?? totals.cost ?? null,
+      cost: await finalCost(totals.cost),
     });
     await persistStats(stats);
     const text = textChunks.join('') || (response.outputText ?? '');
@@ -314,12 +299,48 @@ export async function runAgent(
     result.cancel();
     // The file is already in the gallery; keep the usage we saw instead of leaving its Details empty.
     if (savedPosts.length && !statsSaved) {
-      const stats = buildStats({ provider: providerFromHeaders, reportedTokensPerSec: null, usage: turnTotals, cost: turnTotals.costSeen ? turnTotals.cost : null });
+      const stats = buildStats({ provider: providerFromHeaders, reportedTokensPerSec: null, usage: turnTotals, cost: await finalCost(turnTotals.costSeen ? turnTotals.cost : null) });
       await persistStats(stats).catch((cause) => console.error(`Could not save run stats: ${cause instanceof Error ? cause.message : String(cause)}`));
     }
     throw error;
   } finally {
     options?.signal?.removeEventListener('abort', onAbort);
+  }
+
+  async function finalCost(providerCost: number | null | undefined): Promise<number | null> {
+    if (!config.baseUrl) return providerCost ?? null;
+    if (!cacheKey) return null;
+    const usageUrl = new URL('../api/usage/session', config.baseUrl);
+    usageUrl.searchParams.set('cache_key', cacheKey);
+    // Settlement has its own short budget: a model abort must not discard an available ledger.
+    const deadline = Date.now() + 1000;
+    const signal = AbortSignal.timeout(Math.max(0, deadline - Date.now()));
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (Date.now() >= deadline) break;
+        signal.throwIfAborted();
+        const usageResponse = await fetch(usageUrl, { headers: { Authorization: `Bearer ${config.apiKey}` }, signal });
+        if (usageResponse.ok) {
+          const rows = GatewayUsage.parse(await usageResponse.json()).by_model;
+          // A numeric subtotal is final only when every row explicitly proves full coverage.
+          return rows.length > 0 && rows.every((row) => row.cost_complete === true && row.unpriced_generation_count === 0)
+            ? rows.reduce((sum, row) => sum + row.total_cost, 0)
+            : null;
+        }
+        if (usageResponse.status !== 503) {
+          console.error(`Could not fetch gateway usage from ${usageUrl}: HTTP ${usageResponse.status}`);
+          break;
+        }
+        await usageResponse.body?.cancel();
+        if (attempt === 2) break;
+        const retryAfter = usageResponse.headers.get('retry-after') ?? '1';
+        const retryMs = Number.isFinite(Number(retryAfter)) ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now();
+        await sleep(Math.min(Math.max(0, Number.isFinite(retryMs) ? retryMs : 1000), Math.max(0, deadline - Date.now())), undefined, { signal });
+      }
+    } catch (error) {
+      console.error(`Could not fetch gateway usage: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return null;
   }
 
   function buildStats(parts: { provider: string | null; reportedTokensPerSec: number | null; usage: BaseUsage & { reasoningTokens: number }; cost: number | null }): RunStats {

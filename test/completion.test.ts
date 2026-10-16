@@ -2,13 +2,13 @@ import { expect, spyOn, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runAgent, type RunAgentOptions } from '../src/agent.js';
+import { runAgent, type AgentEvent, type RunAgentOptions } from '../src/agent.js';
 import { loadConfig, type AgentConfig } from '../src/config.js';
 import { createGameStorage, type GameStorage } from '../src/storage.js';
 
 const GAME_SOURCE = '<body style="margin:0;overflow:hidden;width:100vw;height:100vh"><button id="play">A</button><script>document.querySelector("#play").addEventListener("click", () => {});</script></body>';
 
-type Reply = () => Response;
+type Reply = (request: Request) => Response | Promise<Response>;
 type Harness = {
   outDir: string;
   storage: GameStorage;
@@ -42,6 +42,7 @@ function response(output: unknown[], status: 'completed' | 'incomplete' = 'compl
       total_tokens: 30,
       input_tokens_details: { cached_tokens: 0 },
       output_tokens_details: { reasoning_tokens: 0 },
+      cost: 0.75,
     },
   };
 }
@@ -103,21 +104,43 @@ function saveArguments(filename: string) {
   return JSON.stringify({ filename, content: GAME_SOURCE, instructions: 'Click Play.' });
 }
 
-async function withHarness<T>(replies: Reply[], work: (harness: Harness) => Promise<T>): Promise<T> {
+async function withHarness<T>(replies: Reply[], work: (harness: Harness) => Promise<T>, settings?: { usage?: Reply; direct?: boolean }): Promise<T> {
   const outDir = await mkdtemp(join(tmpdir(), 'game-completion-'));
   const requests: Record<string, unknown>[] = [];
-  const server = Bun.serve({
-    port: 0,
-    async fetch(request) {
-      if (new URL(request.url).pathname !== '/v1/responses') return new Response('not found', { status: 404 });
-      requests.push(await request.json() as Record<string, unknown>);
-      const reply = replies.shift();
-      return reply ? reply() : new Response('unexpected follow-up', { status: 500 });
-    },
-  });
+  const handleRequest = async (request: Request) => {
+    const path = new URL(request.url).pathname;
+    if (path === '/api/usage/session') return settings?.usage?.(request) ?? Response.json({ by_model: [] });
+    if (settings?.direct && path.endsWith('/generation')) return Response.json({ data: {
+      api_type: 'completions', app_id: null, cache_discount: null, cancelled: false,
+      created_at: '2026-01-01T00:00:00Z', data_region: 'global', external_user: null,
+      finish_reason: 'stop', generation_time: null, http_referer: null, id: 'test-generation',
+      is_byok: false, latency: null, model: 'completion-test', moderation_latency: null,
+      native_finish_reason: 'stop', native_tokens_cached: null, native_tokens_completion: null,
+      native_tokens_completion_images: null, native_tokens_prompt: null, native_tokens_reasoning: null,
+      num_fetches: null, num_input_audio_prompt: null, num_media_completion: null, num_media_prompt: null,
+      num_search_results: null, origin: 'test', preset_id: null, provider_name: 'test-provider',
+      provider_responses: null, router: null, service_tier: null, streamed: false,
+      tokens_completion: null, tokens_prompt: null, total_cost: 99, upstream_id: null,
+      upstream_inference_cost: null, usage: 99, user_agent: null, web_search_engine: null,
+    } });
+    if (!path.endsWith('/v1/responses')) throw new Error(`Unexpected test request: ${path}`);
+    requests.push(await request.json() as Record<string, unknown>);
+    const reply = replies.shift();
+    return reply ? reply(request) : new Response('unexpected follow-up', { status: 500 });
+  };
+  const server = Bun.serve({ port: 0, fetch: handleRequest });
+  const originalFetch = globalThis.fetch;
+  // Keep the SDK intact; fake only direct HTTP and the optional ledger boundary.
+  const fetchBoundary = settings?.direct || settings?.usage
+    ? spyOn(globalThis, 'fetch').mockImplementation(Object.assign(async (request: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      const incoming = new Request(request, init);
+      return settings.direct || new URL(incoming.url).pathname === '/api/usage/session'
+        ? handleRequest(incoming) : originalFetch(request, init);
+    }, { preconnect: originalFetch.preconnect }))
+    : undefined;
   const config: AgentConfig = loadConfig({
     apiKey: 'test-key',
-    baseUrl: `http://127.0.0.1:${server.port}/v1`,
+    baseUrl: settings?.direct ? undefined : `http://127.0.0.1:${server.port}/v1`,
     model: 'completion-test',
     outDir,
   });
@@ -130,8 +153,134 @@ async function withHarness<T>(replies: Reply[], work: (harness: Harness) => Prom
       run: (options) => runAgent(config, 'Build a game.', { storage, ...(options ?? {}) }),
     });
   } finally {
+    fetchBoundary?.mockRestore();
     server.stop(true);
     await rm(outDir, { recursive: true, force: true });
+  }
+}
+
+const coverageCases = [
+  { label: 'explicit measured zero', rows: [{ total_cost: 0, cost_complete: true, unpriced_generation_count: 0 }], expected: 0 },
+  { label: 'known positive across models', rows: [{ total_cost: 0.25, cost_complete: true, unpriced_generation_count: 0 }, { total_cost: 0.125, cost_complete: true, unpriced_generation_count: 0 }], expected: 0.375 },
+  { label: 'mixed known and unknown', rows: [{ total_cost: 0.25, cost_complete: true, unpriced_generation_count: 0 }, { total_cost: 0, cost_complete: false, unpriced_generation_count: 1 }], expected: null },
+  { label: 'missing markers', rows: [{ total_cost: 0.25 }], expected: null },
+  { label: 'missing count', rows: [{ total_cost: 0.25, cost_complete: true }], expected: null },
+  { label: 'missing completeness', rows: [{ total_cost: 0.25, unpriced_generation_count: 0 }], expected: null },
+  { label: 'contradictory count', rows: [{ total_cost: 0.25, cost_complete: true, unpriced_generation_count: 1 }], expected: null },
+  { label: 'false completeness with zero count', rows: [{ total_cost: 0.25, cost_complete: false, unpriced_generation_count: 0 }], expected: null },
+  { label: 'null completeness', rows: [{ total_cost: 0.25, cost_complete: null, unpriced_generation_count: 0 }], expected: null },
+  { label: 'null count', rows: [{ total_cost: 0.25, cost_complete: true, unpriced_generation_count: null }], expected: null },
+  { label: 'empty ledger', rows: [], expected: null },
+];
+
+for (const outcome of ['completed', 'failed', 'aborted'] as const) {
+  for (const coverage of [...coverageCases, { label: 'unavailable ledger', rows: [], expected: null }]) {
+    test(`gateway run cost: ${outcome}, ${coverage.label}`, async () => {
+      const abort = new AbortController();
+      const events: AgentEvent[] = [];
+      const errors = spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await withHarness([
+          () => streamedFunctionResponse([functionCall('save_game', saveArguments('cost.html'))]),
+          outcome === 'failed'
+            ? () => Response.json(response([], 'incomplete'))
+            : completedTextResponse,
+        ], async ({ run, storage }) => {
+          const pending = run({ signal: abort.signal, onEvent: (event) => {
+            events.push(event);
+            if (outcome === 'aborted' && event.type === 'tool_result') abort.abort();
+          } });
+          if (outcome === 'completed') {
+            const result = await pending;
+            expect(result.stats).toMatchObject({ cost: coverage.expected, inputTokens: 20, outputTokens: 40, totalTokens: 60 });
+            expect(events.find((event) => event.type === 'done')).toMatchObject({ stats: { cost: coverage.expected } });
+          } else {
+            await expect(pending).rejects.toThrow();
+            expect(events.some((event) => event.type === 'done')).toBe(false);
+          }
+          expect((await storage.read('cost.html')).post.stats).toMatchObject({ cost: coverage.expected, inputTokens: outcome === 'completed' ? 20 : 10, outputTokens: outcome === 'completed' ? 40 : 20, totalTokens: outcome === 'completed' ? 60 : 30 });
+        }, { usage: () => coverage.label === 'unavailable ledger'
+          ? new Response('ledger unavailable', { status: 503, headers: { 'retry-after': '0' } })
+          : Response.json({ by_model: coverage.rows }) });
+      } finally { errors.mockRestore(); }
+    });
+  }
+}
+
+for (const outcome of ['completed', 'failed', 'aborted'] as const) {
+  test(`direct provider run cost: ${outcome} retains measured cost despite gateway-like headers`, async () => {
+    const abort = new AbortController();
+    await withHarness([
+      () => {
+        const reply = streamedFunctionResponse([functionCall('save_game', saveArguments('direct-cost.html'))]);
+        reply.headers.set('x-lgw-attempt-providers', 'test-provider');
+        return reply;
+      },
+      () => Response.json(response([message()], outcome === 'failed' ? 'incomplete' : 'completed')),
+    ], async ({ run, storage }) => {
+      const pending = run({ signal: abort.signal, onEvent: (event) => {
+        if (outcome === 'aborted' && event.type === 'tool_result') abort.abort();
+      } });
+      if (outcome === 'completed') expect((await pending).stats.cost).toBe(1.5);
+      else await expect(pending).rejects.toThrow();
+      expect((await storage.read('direct-cost.html')).post.stats?.cost).toBe(outcome === 'completed' ? 1.5 : 0.75);
+    }, { direct: true });
+  });
+}
+
+for (const outcome of ['completed', 'failed', 'aborted'] as const) {
+  for (const boundary of ['stalled fetch', 'stalled body', 'large Retry-After', 'retry then priced'] as const) {
+    test(`gateway settlement deadline: ${outcome}, ${boundary}`, async () => {
+      const abort = new AbortController();
+      const originalAbort = new Error('stop after saved game');
+      const events: AgentEvent[] = [];
+      let ledgerReads = 0;
+      const errors = spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await withHarness([
+          () => streamedFunctionResponse([functionCall('save_game', saveArguments('deadline.html'))]),
+          () => Response.json(response([message()], outcome === 'failed' ? 'incomplete' : 'completed')),
+        ], async ({ run, storage }) => {
+          const pending = run({ signal: abort.signal, onEvent: (event) => {
+            events.push(event);
+            if (outcome === 'aborted' && event.type === 'tool_result') abort.abort(originalAbort);
+          } });
+          let watchdog: ReturnType<typeof setTimeout> | undefined;
+          const bounded = Promise.race([pending, new Promise<never>((_, reject) => {
+            watchdog = setTimeout(() => reject(new Error('ledger settlement exceeded watchdog')), 2200);
+          })]);
+          const expected = { cost: boundary === 'retry then priced' ? 0.375 : null,
+            inputTokens: outcome === 'completed' ? 20 : 10, outputTokens: outcome === 'completed' ? 40 : 20,
+            totalTokens: outcome === 'completed' ? 60 : 30 };
+          try {
+            if (outcome === 'completed') {
+              const result = await bounded;
+              expect(result.stats).toMatchObject(expected);
+              expect(result.savedPosts[0]?.stats).toMatchObject(expected);
+              expect(events.find((event) => event.type === 'done')).toMatchObject({ stats: expected });
+            } else {
+              await expect(bounded).rejects.toThrow(outcome === 'aborted' ? originalAbort.message : 'Model response did not complete');
+              expect(events.some((event) => event.type === 'done')).toBe(false);
+            }
+            expect((await storage.read('deadline.html')).post.stats).toMatchObject(expected);
+            expect(ledgerReads).toBe(boundary === 'retry then priced' ? 2 : 1);
+          } finally { clearTimeout(watchdog); }
+        }, { usage: (request) => {
+          ledgerReads++;
+          request.signal.throwIfAborted();
+          if (boundary === 'stalled fetch') return new Promise<Response>((_, reject) => {
+            request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true });
+          });
+          if (boundary === 'stalled body') return new Response(new ReadableStream({ start(controller) {
+            request.signal.addEventListener('abort', () => controller.error(request.signal.reason), { once: true });
+          } }), { headers: { 'content-type': 'application/json' } });
+          if (boundary === 'retry then priced' && ledgerReads === 2) return Response.json({
+            by_model: [{ total_cost: 0.375, cost_complete: true, unpriced_generation_count: 0 }],
+          });
+          return new Response('settling', { status: 503, headers: { 'retry-after': boundary === 'large Retry-After' ? '86400' : '0' } });
+        } });
+      } finally { errors.mockRestore(); }
+    });
   }
 }
 
