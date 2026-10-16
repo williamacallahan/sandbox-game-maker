@@ -284,6 +284,53 @@ for (const outcome of ['completed', 'failed', 'aborted'] as const) {
   }
 }
 
+test('gateway settlement lifecycle: abort while settling preserves stats without completing', async () => {
+  const abort = new AbortController();
+  const abortError = new Error('cancel during settlement');
+  const events: AgentEvent[] = [];
+  await withHarness([
+    () => streamedFunctionResponse([functionCall('save_game', saveArguments('settlement-abort.html'))]),
+    completedTextResponse,
+  ], async ({ run, storage }) => {
+    await expect(run({ signal: abort.signal, onEvent: (event) => events.push(event) })).rejects.toBe(abortError);
+    expect((await storage.read('settlement-abort.html')).post.stats).toMatchObject({
+      cost: 0.375, inputTokens: 20, outputTokens: 40, totalTokens: 60,
+    });
+    expect(events.some((event) => event.type === 'done')).toBe(false);
+  }, { usage: async () => {
+    abort.abort(abortError);
+    await Promise.resolve();
+    return Response.json({ by_model: [{ total_cost: 0.375, cost_complete: true, unpriced_generation_count: 0 }] });
+  } });
+});
+
+test('gateway settlement lifecycle: stats write failure retains the original settlement', async () => {
+  const storageError = new Error('stats write interrupted');
+  const events: AgentEvent[] = [];
+  let ledgerReads = 0;
+  await withHarness([
+    () => streamedFunctionResponse([functionCall('save_game', saveArguments('settlement-storage.html'))]),
+    completedTextResponse,
+  ], async ({ run, storage }) => {
+    const saveStats = storage.saveStats.bind(storage);
+    let interrupted = false;
+    storage.saveStats = async (...args) => {
+      if (!interrupted) { interrupted = true; throw storageError; }
+      await saveStats(...args);
+    };
+    await expect(run({ onEvent: (event) => events.push(event) })).rejects.toBe(storageError);
+    expect((await storage.read('settlement-storage.html')).post.stats).toMatchObject({
+      cost: 0.375, inputTokens: 20, outputTokens: 40, totalTokens: 60,
+    });
+    expect(events.some((event) => event.type === 'done')).toBe(false);
+  }, { usage: () => {
+    ledgerReads++;
+    return Response.json({ by_model: ledgerReads === 1
+      ? [{ total_cost: 0.375, cost_complete: true, unpriced_generation_count: 0 }]
+      : [{ total_cost: 0.375, cost_complete: false, unpriced_generation_count: 1 }] });
+  } });
+});
+
 for (const [label, options] of [
   ['without an event consumer', undefined],
   ['with an event consumer', { onEvent: () => {} }],

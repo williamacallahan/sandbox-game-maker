@@ -109,6 +109,7 @@ export async function runAgent(
 
   // PostModelCall includes the initial save response even if its follow-up fails or is aborted.
   const turnTotals = { inputTokens: 0, outputTokens: 0, totalTokens: 0, reasoningTokens: 0, cost: 0, costSeen: false };
+  let costSettlement: Promise<number | null> | undefined;
   let statsSaved = false;
   const headers: Record<string, string> = cacheKey
     ? { 'X-LGW-Cache-Key': cacheKey, 'X-User-ID': `sandbox-game-maker:${config.mode ?? 'game'}Agent` }
@@ -289,9 +290,10 @@ export async function runAgent(
           ? Math.round((generation.nativeTokensCompletion / generation.generationTime) * 1000)
           : null,
       usage: totals,
-      cost: await finalCost(totals.cost),
+      cost: await (costSettlement ??= finalCost(totals.cost)),
     });
     await persistStats(stats);
+    options?.signal?.throwIfAborted();
     const text = textChunks.join('') || (response.outputText ?? '');
     options?.onEvent?.({ type: 'done', durationMs, stats });
     return { text, output: response.output, durationMs, stats, savedPosts };
@@ -299,7 +301,7 @@ export async function runAgent(
     result.cancel();
     // The file is already in the gallery; keep the usage we saw instead of leaving its Details empty.
     if (savedPosts.length && !statsSaved) {
-      const stats = buildStats({ provider: providerFromHeaders, reportedTokensPerSec: null, usage: turnTotals, cost: await finalCost(turnTotals.costSeen ? turnTotals.cost : null) });
+      const stats = buildStats({ provider: providerFromHeaders, reportedTokensPerSec: null, usage: turnTotals, cost: await (costSettlement ??= finalCost(turnTotals.costSeen ? turnTotals.cost : null)) });
       await persistStats(stats).catch((cause) => console.error(`Could not save run stats: ${cause instanceof Error ? cause.message : String(cause)}`));
     }
     throw error;
